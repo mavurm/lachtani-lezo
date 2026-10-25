@@ -62,6 +62,13 @@ body{
 .life{width:24px;height:24px;fill:var(--danger);filter:drop-shadow(0 2px 0 rgba(10,20,30,.45));transition:opacity .3s,transform .3s}
 .life.lost{opacity:.22;transform:scale(.8)}
 .hud-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.hud-mid{display:flex;flex-direction:column;align-items:center;gap:6px}
+.pump{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.pump-bar{width:78px;height:8px;border-radius:4px;background:rgba(14,26,38,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(246,248,250,.25)}
+#pumpFill{display:block;height:100%;width:100%;background:var(--zone);transition:width .2s,background-color .3s}
+.pump.low #pumpFill{animation:pumpBlink .45s infinite alternate}
+@keyframes pumpBlink{to{opacity:.35}}
+@media (prefers-reduced-motion: reduce){ .pump.low #pumpFill{animation:none} }
 .chip{
   font-family:var(--font-display);font-weight:800;font-size:15px;line-height:1;
   background:rgba(14,26,38,.55);border-radius:999px;padding:6px 10px 4px;
@@ -156,10 +163,13 @@ h2{font-size:22px}
     <span class="hud-lbl">bodů</span>
     <span class="hud-sub" id="bestHud">rekord 0</span>
   </div>
+  <div class="hud-mid">
   <div class="hud-lives" id="lives" aria-label="Zbývající pokusy">
     <svg class="life" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
     <svg class="life" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
     <svg class="life" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+  </div>
+  <div class="pump" id="pump" aria-label="Síla"><span>Síla</span><span class="pump-bar"><span id="pumpFill"></span></span></div>
   </div>
   <div class="hud-right">
     <span class="chip" id="grade">4 · 0 m</span>
@@ -536,6 +546,7 @@ function reset() {
     pose: 'idle', face: 0, particles: [], floaters: [], bubble: null,
     clip: null, rest: null, shake: 0, tilt: null, zc: 0.5, zBase: 0.5, ease: 0,
     items: new Map(), nextItemAt: 6 + Math.floor(Math.random() * 10), fx: { chalk: 0, beer: 0 },
+    pump: 100, hang: 0, pumpWarned: false,
     day: null, nextDay: 12 + Math.floor(Math.random() * 15), flash: null, hint: gamesPlayed === 0 ? 3 : 0
   });
   updHUD();
@@ -576,6 +587,25 @@ function moveDiff() {
   const drift = (m.drift || 0) + (fx.beer > 0 ? ITEMS.beer.drift : 0);
   return { speed: d.speed * (m.speed || 1), zone, perf: Math.max(0.014, zone * 0.18), drift, bonus: m.bonus || 1 };
 }
+/* Pump: forearm strength. Every hold costs some, a perfect hit costs half and gives a little back;
+   hanging is free for about five round trips of the slider, then it slowly drains. */
+const PUMP_COST = { jug: 6, pocket: 9, pinch: 9, crimp: 11, sloper: 11 };
+const PUMP_PERFECT_BACK = 3, PUMP_GRACE_TRIPS = 5, PUMP_DRAIN = 3;
+let pumpShown = -1;
+function renderPump() {
+  const v = Math.max(0, Math.round(G.pump));
+  if (v === pumpShown) return;
+  pumpShown = v;
+  $('pumpFill').style.width = v + '%';
+  $('pumpFill').style.backgroundColor = v > 50 ? 'var(--zone)' : v > 25 ? 'var(--perfect)' : 'var(--danger)';
+  $('pump').classList.toggle('low', v <= 25);
+}
+function pumpedOff() {
+  G.pump = 0;
+  say('Ploutve mi došly!', 1.4);
+  SFX.miss();
+  startFall();
+}
 /* Wall items: hang next to a hold on the route and are only taken with a perfect hit onto that hold.
    A plain hit knocks the item off the wall. */
 const ITEMS = {
@@ -602,9 +632,9 @@ function takeItem(i, it) {
   const pos = itemPos(i), v = ITEMS[it.type];
   it.state = 'taken';
   let text = v.text;
-  if (it.type === 'chalk') G.fx.chalk = v.holds;
+  if (it.type === 'chalk') { G.fx.chalk = v.holds; G.pump = Math.min(100, G.pump + 25); }
   if (it.type === 'beer') { G.fx.beer = v.holds; G.bonus += v.points; }
-  if (it.type === 'fried') { if (G.lives < 3) G.lives++; else { G.bonus += 3; text = v.full; } }
+  if (it.type === 'fried') { G.pump = 100; if (G.lives < 3) G.lives++; else { G.bonus += 3; text = v.full; } }
   updHUD();
   floater(text, '#ffd23f', pos.x, pos.y - S * 0.3, 22);
   chalk(pos.x, pos.y, 8, 90);
@@ -616,6 +646,7 @@ function newZone() {
   const d = moveDiff(), [lo, hi] = zoneLimits(d), sway = Math.min(d.drift, (hi - lo) / 2);
   G.zBase = lo + sway + Math.random() * Math.max(0, hi - lo - 2 * sway);
   G.zc = G.zBase;
+  G.hang = 0;
 }
 function startGame() {
   audio();
@@ -647,6 +678,9 @@ function tap() {
     } else SFX.grab();
     G.flash = { c: '#3fd16b', t: .25 };
     if (G.hint > 0) G.hint--;
+    const cost = PUMP_COST[hold(G.cur + 1).t] || 8;
+    G.pump = Math.min(100, G.pump - (perfect ? cost / 2 - PUMP_PERFECT_BACK : cost));
+    if (G.pump <= 0) { pumpedOff(); return; }
     startMove(G.cur + 1);
   } else {
     G.flash = { c: '#e63946', t: .4 };
@@ -691,6 +725,7 @@ function startRest(i) {
 function finishRest() {
   G.mode = 'climb'; G.pose = 'idle'; G.face = 0.6; say('Lezu!', 1.1);
   G.ease += REST_EASE; newZone();
+  G.pump = 100;
   floater('Odpočatá!', '#3fd16b', W / 2, G.sy + S * 1.6, 22);
 }
 const STRANGER_BODY = ['#8f9ca8', '#a08a74', '#6f7880', '#b3a28e', '#7a8691', '#9c8f99'];
@@ -785,6 +820,7 @@ function updateFall(dt) {
 }
 function endFall() {
   G.anim = null; G.tilt = null; G.cur = G.lastClip; updHUD();
+  G.pump = 100;
   G.sx = holdX(G.cur); G.sy = holdY(G.cur);
   newZone();
   if (G.lives <= 0) gameOver();
@@ -850,6 +886,13 @@ function update(dt) {
     case 'climb': {
       const d = moveDiff();
       if (d.drift) { const [lo, hi] = zoneLimits(d); G.zc = clamp(G.zBase + d.drift * Math.sin(G.time * 2.4), lo, hi); }
+      G.hang += dt;
+      if (G.hang > PUMP_GRACE_TRIPS * 2 / d.speed) {
+        G.pump -= PUMP_DRAIN * dt;
+        if (G.pump <= 0) { pumpedOff(); break; }
+      }
+      if (G.pump < 25 && !G.pumpWarned) { G.pumpWarned = true; say('Pumpa!', 1.2); }
+      if (G.pump > 40) G.pumpWarned = false;
       G.p += G.dir * d.speed * dt;
       if (G.p > 1) { G.p = 2 - G.p; G.dir = -1; }
       if (G.p < 0) { G.p = -G.p; G.dir = 1; }
@@ -907,6 +950,7 @@ function update(dt) {
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 30);
   if (G.flash) { G.flash.t -= dt; if (G.flash.t <= 0) G.flash = null; }
   if (G.face > 0) G.face -= dt;
+  if (G.pump !== undefined) renderPump();
 }
 
 /* ---------- drawing ---------- */
@@ -1185,7 +1229,7 @@ function flipper(x0, y0, x1, y1) {
 }
 function drawSeal() {
   const t = G.time, pose = G.pose;
-  const x = G.sx, y = toSY(G.sy);
+  const x = G.sx + (G.mode === 'climb' && G.pump < 25 ? Math.sin(G.time * 45) * 1.6 : 0), y = toSY(G.sy);
   ctx.save(); ctx.translate(x, y); ctx.scale(K * SEAL, K * SEAL);
   let tilt = Math.sin(t * 1.7) * 0.05;
   if (pose === 'fall') tilt = Math.sin(t * 18) * 0.15;
