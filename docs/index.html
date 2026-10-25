@@ -482,7 +482,7 @@ const holds = [];
 function hold(i) {
   while (holds.length <= i) {
     const j = holds.length, side = j % 2 ? 1 : -1;
-    holds.push({ x: j === 0 ? 0.5 : 0.5 + side * (0.05 + hr(j, 1) * 0.14), s: (hr(j, 2) * 100000) | 0, r: 0.85 + hr(j, 3) * 0.35, t: j === 0 ? 'jug' : HOLD_TYPES[(hr(j, 4) * HOLD_TYPES.length) | 0] });
+    holds.push({ x: j === 0 ? 0.5 : 0.5 + side * (0.05 + hr(j, 1) * 0.14), s: (hr(j, 2) * 100000) | 0, r: 0.85 + hr(j, 3) * 0.35, t: j <= 5 ? 'jug' : HOLD_TYPES[(hr(j, 4) * HOLD_TYPES.length) | 0] });
   }
   return holds[i];
 }
@@ -534,7 +534,7 @@ function reset() {
     p: 0, dir: 1, time: 0, anim: null,
     sx: holdX(0), sy: holdY(0), camY: holdY(0),
     pose: 'idle', face: 0, particles: [], floaters: [], bubble: null,
-    clip: null, rest: null, shake: 0, tilt: null, zc: 0.5, ease: 0,
+    clip: null, rest: null, shake: 0, tilt: null, zc: 0.5, zBase: 0.5, ease: 0,
     day: null, nextDay: 12 + Math.floor(Math.random() * 15), flash: null, hint: gamesPlayed === 0 ? 3 : 0
   });
   updHUD();
@@ -561,10 +561,25 @@ function chalk(wx, wy, n, spread) {
 }
 
 /* ---------- flow ---------- */
+// What each hold shape does to the move onto it; the player learns it by playing.
+const HOLD_MODS = {
+  jug: { zone: 1.3, speed: 0.9 },     // easy breather
+  crimp: { speed: 1.35 },             // fast
+  sloper: { zone: 0.7 },              // slippery, narrow
+  pinch: { drift: 0.12 },             // the zone sways along the bar
+  pocket: { zone: 0.6, bonus: 2 }     // small, but a perfect hit pays double
+};
+function moveDiff() {
+  const i = G.cur + 1, d = diff(i), m = HOLD_MODS[hold(i).t] || {};
+  const zone = Math.min(0.6, d.zone * (m.zone || 1));
+  return { speed: d.speed * (m.speed || 1), zone, perf: Math.max(0.014, zone * 0.18), drift: m.drift || 0, bonus: m.bonus || 1 };
+}
 // each hold gets its zone somewhere new on the bar, kept fully inside it
+function zoneLimits(d) { const half = d.zone / 2 + 0.03; return [half, 1 - half]; }
 function newZone() {
-  const half = diff(G.cur + 1).zone / 2 + 0.03;
-  G.zc = half + Math.random() * (1 - 2 * half);
+  const d = moveDiff(), [lo, hi] = zoneLimits(d), sway = Math.min(d.drift, (hi - lo) / 2);
+  G.zBase = lo + sway + Math.random() * Math.max(0, hi - lo - 2 * sway);
+  G.zc = G.zBase;
 }
 function startGame() {
   audio();
@@ -582,12 +597,12 @@ function startGame() {
 }
 function tap() {
   if (G.mode !== 'climb') return;
-  const d = diff(G.cur + 1);
+  const d = moveDiff();
   const off = Math.abs(G.p - G.zc);
   if (off <= d.zone / 2) {
     if (off <= d.perf) {
-      G.bonus++; G.perfects++; G.face = 0.9;
-      floater('PERFEKTNÍ! +1', '#3fd16b', holdX(G.cur + 1), holdY(G.cur + 1) - S * 0.35, 26);
+      G.bonus += d.bonus; G.perfects++; G.face = 0.9;
+      floater('PERFEKTNÍ! +' + d.bonus, '#3fd16b', holdX(G.cur + 1), holdY(G.cur + 1) - S * 0.35, 26);
       SFX.perfect(); vibrate(15);
     } else SFX.grab();
     G.flash = { c: '#3fd16b', t: .25 };
@@ -793,7 +808,8 @@ function update(dt) {
   G.time += dt;
   switch (G.mode) {
     case 'climb': {
-      const d = diff(G.cur + 1);
+      const d = moveDiff();
+      if (d.drift) { const [lo, hi] = zoneLimits(d); G.zc = clamp(G.zBase + d.drift * Math.sin(G.time * 2.4), lo, hi); }
       G.p += G.dir * d.speed * dt;
       if (G.p > 1) { G.p = 2 - G.p; G.dir = -1; }
       if (G.p < 0) { G.p = -G.p; G.dir = 1; }
@@ -1038,6 +1054,11 @@ function drawRoute() {
   const [a, b] = visibleRange();
   for (let i = a; i <= b; i++) {
     const h = hold(i), x = holdX(i), y = toSY(holdY(i));
+    if (i === G.cur + 1 && (G.mode === 'climb' || G.mode === 'clip' || G.mode === 'rest' || G.mode === 'day')) {
+      const pulse = 0.5 + 0.5 * Math.sin(G.time * 5);
+      ctx.strokeStyle = 'rgba(246,248,250,' + (0.35 + pulse * 0.4) + ')'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(x, y, S * 0.16 * h.r * (1.55 + pulse * 0.15), 0, Math.PI * 2); ctx.stroke();
+    }
     drawHold(x, y, S * 0.16 * h.r * (i === 0 ? 1.2 : 1), routeColor, h.s, 1, h.t, true);
     if (i === 0) {
       ctx.save(); ctx.translate(x, y + S * 0.3); ctx.rotate(-0.08);
@@ -1363,7 +1384,7 @@ function barGeom() {
 function drawUI() {
   const b = barGeom();
   if (G.mode === 'climb' || G.mode === 'move') {
-    const d = diff(G.cur + 1);
+    const d = moveDiff();
     ctx.fillStyle = 'rgba(14,26,38,.62)'; rr(b.x - 10, b.y - 10, b.w + 20, b.h + 20, 18); ctx.fill();
     if (G.flash) { ctx.strokeStyle = G.flash.c; ctx.lineWidth = 4; rr(b.x - 10, b.y - 10, b.w + 20, b.h + 20, 18); ctx.stroke(); }
     ctx.fillStyle = '#e4eaef'; rr(b.x, b.y, b.w, b.h, 12); ctx.fill();
