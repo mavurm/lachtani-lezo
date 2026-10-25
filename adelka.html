@@ -530,6 +530,7 @@ function reset() {
     clip: null, rest: null, shake: 0, tilt: null, zc: 0.5, zBase: 0.5, ease: 0,
     items: new Map(), nextItemAt: 6 + Math.floor(Math.random() * 10), fx: { chalk: 0, beer: 0 },
     pump: 100, hang: 0, pumpWarned: false,
+    mara: null,
     eye: null, nextEyeAt: 15 + Math.floor(Math.random() * 6), wind: 0, nextGustAt: 0,
     day: null, nextDay: 12 + Math.floor(Math.random() * 15), flash: null, hint: gamesPlayed === 0 ? 3 : 0
   });
@@ -722,6 +723,7 @@ function clipDone() {
   const i = G.clip.i, b = boltPos(i);
   G.clipped.add(i); G.lastClip = i; G.clip = null; G.face = 0.8;
   SFX.clip(); vibrate(20);
+  maraSay(MARA.clip, 0.3);
   floater('Cvak!', '#ffffff', b.cx, b.cy - 20 * K, 24);
   chalk(b.cx, b.cy, 6, 80);
   if (i % 10 === 0 && i > G.lastRest) startRest(i);
@@ -731,6 +733,7 @@ function clipDone() {
 function startRest(i) {
   G.lastRest = i; G.mode = 'rest'; G.rest = { t: 0, puff: 0 }; G.pose = 'rest';
   SFX.rest(); say(pick(REST_WORDS), 2.4);
+  maraSay(MARA.rest, 1.2);
 }
 function finishRest() {
   G.mode = 'climb'; G.pose = 'idle'; G.face = 0.6; say('Lezu!', 1.1);
@@ -756,6 +759,7 @@ function startDay(i) {
   }
   G.day = { t: 0, puff: 0, said: false, crowd };
   SFX.day(); vibrate([20, 30, 20]);
+  maraSay(MARA.day, 2.3);
 }
 function startFall() {
   G.lives--; updHUD();
@@ -771,7 +775,16 @@ function startFall() {
   }
   G.anim = a;
 }
-function caught(a) { G.shake = reduceMotion ? 0 : 9; vibrate(60); chalk(a.hx, a.hy, 6, 90); }
+/* Mára, the belayer: stands on the mat under the route; when he is off screen he speaks from a small round window. */
+const MARA = {
+  catch: ['Dobrý?'],
+  clip: ['Kedlubna?', 'Hezky!'],
+  rest: ['Jseš?'],
+  day: ['Já říkal, že je dneska den lezení!'],
+  lower: ['Jedu, jo?']
+};
+function maraSay(list, delay) { G.mara = { text: pick(list), t: -(delay || 0), dur: 2.4 }; }
+function caught(a) { G.shake = reduceMotion ? 0 : 9; vibrate(60); chalk(a.hx, a.hy, 6, 90); maraSay(MARA.catch); }
 function updateFall(dt) {
   const a = G.anim; a.t += dt;
   if (a.phase === 'drop') {
@@ -804,6 +817,7 @@ function updateFall(dt) {
         a.x0 = clamp(x, 30, W - 30); a.y0 = y; a.gy = a.hOff;
         a.dl = Math.max(0.45, (a.gy - y) / (S * 14));
         SFX.lower();
+        maraSay(MARA.lower, 0.4);
       }
     } else {
       // belayer takes in rope while she swings over to the hold by the bolt
@@ -967,6 +981,7 @@ function update(dt) {
   for (const f of G.floaters) f.t += dt;
   G.floaters = G.floaters.filter(f => f.t < f.dur);
   if (G.bubble) { G.bubble.t += dt; if (G.bubble.t > G.bubble.dur) G.bubble = null; }
+  if (G.mara) { G.mara.t += dt; if (G.mara.t > G.mara.dur) G.mara = null; }
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 30);
   if (G.flash) { G.flash.t -= dt; if (G.flash.t <= 0) G.flash = null; }
   if (G.face > 0) G.face -= dt;
@@ -1206,7 +1221,8 @@ function ropeStroke(pts) {
   path(); ctx.strokeStyle = 'rgba(70,85,20,.65)'; ctx.lineWidth = 1.3; ctx.setLineDash([3, 6]); ctx.stroke(); ctx.setLineDash([]);
 }
 function drawRope() {
-  const pts = [{ x: W * 0.5, y: toSY(S * 4) }];
+  const dv = belayDevice();
+  const pts = [{ x: dv.x, y: toSY(dv.y) }];
   for (const i of bolts) {
     if (i <= 0 || i > G.lastClip || !G.clipped.has(i)) continue;
     const p = boltPos(i);
@@ -1498,6 +1514,154 @@ function drawEffects(b) {
     x += 70;
   }
 }
+const MARA_X = 0.17;   // where he stands, as a share of the wall width
+const groundY = () => S * 1.15;
+function maraPose() {
+  const a = G.anim, t = G.time;
+  let lean = Math.sin(t * 1.3) * 0.03, slide = 0, guide = 0, brake = 0;
+  if (G.mode === 'fall' && a) {
+    if (a.phase === 'drop' || a.phase === 'swing') { lean = -0.16; slide = 6; }
+    if (a.phase === 'lower') brake = Math.sin(t * 18) * 5;
+  }
+  if (G.mode === 'move') guide = Math.sin(t * 18) * 6;
+  return { lean, slide, guide, brake };
+}
+function belayDevice() {
+  const k = K * SEAL, ps = maraPose();
+  return { x: W * MARA_X + ps.slide + 10.5 * k, y: groundY() + 14 - 46 * k };
+}
+const belayerVisible = () => toSY(groundY()) - 130 * K * SEAL < H - 90;
+function maraHead() {
+  ctx.fillStyle = '#7a8691'; ctx.beginPath(); ctx.arc(0, 0, 21, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#c3cbd2'; ctx.beginPath(); ctx.ellipse(0, 10, 11.5, 8.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(246,248,250,.9)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const sd of [-1, 1]) for (const dy of [-4, 0, 4]) { ctx.moveTo(sd * 8, 10 + dy * .3); ctx.lineTo(sd * 24, 8 + dy); }
+  ctx.stroke();
+  ctx.fillStyle = '#2a2f36'; ctx.beginPath(); ctx.ellipse(0, 5.5, 4.6, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2a2f36'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(-2.6, 11, 2.6, 0.1, Math.PI - 0.1); ctx.arc(2.6, 11, 2.6, 0.1, Math.PI - 0.1); ctx.stroke();
+  for (const sd of [-1, 1]) {
+    const ex = sd * 8.5, ey = -4;
+    ctx.fillStyle = '#1b1f24'; ctx.beginPath(); ctx.arc(ex, ey, 3.9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex + 0.8, ey - 1.8, 1.3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a3f46'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(ex - 4.5, ey - 7.5 + (sd > 0 ? 1 : 0)); ctx.lineTo(ex + 4.5, ey - 8.5 + (sd > 0 ? 0 : 1)); ctx.stroke();
+  }
+}
+function maraShoe(sd) {
+  ctx.save(); ctx.translate(sd * 11, -5); ctx.scale(sd, 1);
+  const shoe = () => {
+    ctx.beginPath();
+    ctx.moveTo(-5, -6); ctx.lineTo(3, -6);
+    ctx.quadraticCurveTo(11, -4, 18, 4);
+    ctx.quadraticCurveTo(8, 7.5, -2, 6);
+    ctx.quadraticCurveTo(-9, 5.5, -8.5, 0);
+    ctx.quadraticCurveTo(-8, -5, -5, -6);
+    ctx.closePath();
+  };
+  shoe(); ctx.fillStyle = '#1f5135'; ctx.fill();
+  ctx.save(); shoe(); ctx.clip();
+  ctx.fillStyle = '#111316'; ctx.fillRect(-10, 3, 32, 8);
+  ctx.beginPath(); ctx.ellipse(15, 2, 5, 4, 0.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#f6f8fa';
+  ctx.beginPath(); ctx.moveTo(1, -2); ctx.lineTo(4, -4); ctx.lineTo(7, -2); ctx.lineTo(4, 0); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawBelayer() {
+  const k = K * SEAL, baseY = toSY(groundY() + 14);
+  if (baseY - 140 * k > H) return;
+  const ps = maraPose(), x = W * MARA_X + ps.slide;
+  ctx.save(); ctx.translate(x, baseY); ctx.scale(k, k); ctx.rotate(ps.lean);
+  // brake strand and the rope pile at his feet
+  ctx.strokeStyle = '#c9dc35'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(12, -30); ctx.quadraticCurveTo(26, -18 + ps.brake, 22, -26 + ps.brake); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(22, -26 + ps.brake); ctx.quadraticCurveTo(34, -8, 30, -1); ctx.stroke();
+  for (const [ox, rx] of [[30, 11], [33, 8]]) { ctx.beginPath(); ctx.ellipse(ox, -1, rx, 3, 0, 0, Math.PI * 2); ctx.stroke(); }
+  for (const sd of [-1, 1]) {
+    ctx.fillStyle = '#6c7884'; ctx.beginPath(); ctx.ellipse(sd * 10, -16, 7.5, 11, 0, 0, Math.PI * 2); ctx.fill();
+    maraShoe(sd);
+  }
+  ctx.fillStyle = '#6c7884'; ctx.beginPath(); ctx.ellipse(0, -64, 26, 36, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#b9c2ca'; ctx.beginPath(); ctx.ellipse(0, -66, 15, 25, 0, 0, Math.PI * 2); ctx.fill();
+  // grey shorts
+  ctx.fillStyle = '#9aa0a6';
+  ctx.beginPath(); ctx.moveTo(-25, -46); ctx.lineTo(25, -46); ctx.lineTo(24, -20); ctx.lineTo(3, -20); ctx.lineTo(0, -27); ctx.lineTo(-3, -20); ctx.lineTo(-24, -20); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#7c8288'; ctx.fillRect(-25, -47, 50, 4);
+  // dark blue harness
+  ctx.strokeStyle = '#1f3a8a'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.ellipse(0, -45, 26, 5, 0, 0.05, Math.PI - 0.05); ctx.stroke();
+  ctx.lineWidth = 4;
+  for (const sd of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sd * 12, -27, 10, 3.5, 0, 0, Math.PI); ctx.stroke(); }
+  // metallic blue belay device on a grey carabiner
+  ctx.strokeStyle = '#c9d1d9'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(5, -37, 3, 5, 0, 0, Math.PI * 2); ctx.stroke();
+  const g = ctx.createLinearGradient(4, -48, 17, -30);
+  g.addColorStop(0, '#93c5fd'); g.addColorStop(0.45, '#2563eb'); g.addColorStop(1, '#1e3a8a');
+  ctx.fillStyle = g; rr(4, -48, 13, 18, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(6.5, -45, 2, 11);
+  ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(12.5, -35, 1.6, 0, Math.PI * 2); ctx.fill();
+  // flippers: guide hand on the rope above the device, brake hand below it
+  flipper(-21, -84, 9, -70 + ps.guide);
+  flipper(21, -82, 22, -26 + ps.brake);
+  ctx.save(); ctx.translate(0, -112);
+  ctx.rotate(-0.12);
+  maraHead();
+  ctx.restore();
+  ctx.restore();
+}
+function wrapText(text, maxW) {
+  const words = text.split(' '), lines = [];
+  let line = '';
+  for (const w of words) {
+    const tryLine = line ? line + ' ' + w : w;
+    if (ctx.measureText(tryLine).width > maxW && line) { lines.push(line); line = w; } else line = tryLine;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+// a speech bubble whose tail points at (ax, ay); dir -1 puts the bubble to the left of the point, 1 to the right
+function speech(text, ax, ay, dir, alpha) {
+  ctx.font = '800 14px Nunito, system-ui, sans-serif';
+  const lines = wrapText(text, Math.min(200, W * 0.55));
+  const lh = 18, bw = Math.max(...lines.map(l => ctx.measureText(l).width)) + 20, bh = lines.length * lh + 12;
+  let bx = dir < 0 ? ax - bw - 10 : ax + 10;
+  bx = clamp(bx, 8, W - bw - 8);
+  const by = ay - bh / 2;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#f6f8fa'; rr(bx, by, bw, bh, 12); ctx.fill();
+  ctx.beginPath();
+  const tx = dir < 0 ? bx + bw : bx;
+  ctx.moveTo(tx, ay - 6); ctx.lineTo(tx, ay + 6); ctx.lineTo(dir < 0 ? tx + 10 : tx - 10, ay); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#1d2b3a'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  lines.forEach((l, i) => ctx.fillText(l, bx + 10, by + 6 + lh * (i + 0.5)));
+  ctx.globalAlpha = 1;
+}
+function drawMara() {
+  const m = G.mara;
+  if (!m || m.t < 0 || G.mode === 'menu') return;
+  const a = Math.min(1, m.t / 0.15, (m.dur - m.t) / 0.25);
+  if (belayerVisible()) {
+    const k = K * SEAL;
+    speech('Mára: ' + m.text, W * MARA_X + 8 * k, toSY(groundY() + 14) - 165 * k, 1, Math.max(0, a));
+    return;
+  }
+  const b = barGeom(), r = 30, px = W - 16 - r - 4, py = b.y - 62 - r;
+  const sc = Math.min(1, m.t / 0.18);
+  ctx.save(); ctx.globalAlpha = Math.max(0, a);
+  ctx.translate(px, py); ctx.scale(sc, sc);
+  ctx.fillStyle = '#2b4560'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r - 2, 0, Math.PI * 2); ctx.clip();
+  ctx.translate(0, 6); ctx.scale(1.05, 1.05); maraHead();
+  ctx.restore();
+  ctx.strokeStyle = '#f6f8fa'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#1f3a8a'; rr(-20, r - 8, 40, 16, 8); ctx.fill();
+  ctx.fillStyle = '#f6f8fa'; ctx.font = '800 11px Nunito, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('Mára', 0, r);
+  ctx.restore();
+  speech(m.text, px - r - 4, py, -1, Math.max(0, a));
+}
 function drawParticles() {
   for (const p of G.particles) {
     const u = p.t / p.dur;
@@ -1524,7 +1688,7 @@ function drawBubble() {
   const hx = G.sx, hy = toSY(G.sy + 30 * K * SEAL);
   ctx.font = '800 15px Nunito, system-ui, sans-serif';
   const tw = ctx.measureText(b.text).width, bw = tw + 22, bh = 32;
-  const right = hx < W / 2;
+  const right = hx < W / 2 || belayerVisible();   // Mára talks on the left when he is in view
   let bx = right ? hx + 30 * K : hx - 30 * K - bw;
   bx = clamp(bx, 8, W - bw - 8);
   const by = hy - 52 * K - bh;
@@ -1606,7 +1770,7 @@ function draw() {
   ctx.save();
   if (G.shake > 0) ctx.translate((Math.random() - .5) * G.shake, (Math.random() - .5) * G.shake);
   drawWall(); drawVolumes(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawItems(); drawBolts();
-  drawRope(); drawSeal();
+  drawBelayer(); drawRope(); drawSeal();
   if (G.mode === 'day' && G.day) drawCrowd();
   if (G.eye) {
     const e = G.eye, wy = G.sy - S * 1.2 - (e.t < 0.5 ? (0.5 - e.t) * S * 4 : (e.t > 2.2 ? (e.t - 2.2) * S * 3 : 0));
@@ -1625,6 +1789,7 @@ function draw() {
   drawParticles(); drawFloaters(); drawBubble();
   ctx.restore();
   drawUI();
+  drawMara();
 }
 let last = performance.now();
 function frame(now) {
