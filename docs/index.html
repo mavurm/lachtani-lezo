@@ -535,6 +535,7 @@ function reset() {
     sx: holdX(0), sy: holdY(0), camY: holdY(0),
     pose: 'idle', face: 0, particles: [], floaters: [], bubble: null,
     clip: null, rest: null, shake: 0, tilt: null, zc: 0.5, zBase: 0.5, ease: 0,
+    items: new Map(), nextItemAt: 6 + Math.floor(Math.random() * 10), fx: { chalk: 0, beer: 0 },
     day: null, nextDay: 12 + Math.floor(Math.random() * 15), flash: null, hint: gamesPlayed === 0 ? 3 : 0
   });
   updHUD();
@@ -570,9 +571,44 @@ const HOLD_MODS = {
   pocket: { zone: 0.6, bonus: 2 }     // small, but a perfect hit pays double
 };
 function moveDiff() {
-  const i = G.cur + 1, d = diff(i), m = HOLD_MODS[hold(i).t] || {};
-  const zone = Math.min(0.6, d.zone * (m.zone || 1));
-  return { speed: d.speed * (m.speed || 1), zone, perf: Math.max(0.014, zone * 0.18), drift: m.drift || 0, bonus: m.bonus || 1 };
+  const i = G.cur + 1, d = diff(i), m = HOLD_MODS[hold(i).t] || {}, fx = G.fx || {};
+  const zone = Math.min(0.6, d.zone * (m.zone || 1) * (fx.chalk > 0 ? ITEMS.chalk.zone : 1));
+  const drift = (m.drift || 0) + (fx.beer > 0 ? ITEMS.beer.drift : 0);
+  return { speed: d.speed * (m.speed || 1), zone, perf: Math.max(0.014, zone * 0.18), drift, bonus: m.bonus || 1 };
+}
+/* Wall items: hang next to a hold on the route and are only taken with a perfect hit onto that hold.
+   A plain hit knocks the item off the wall. */
+const ITEMS = {
+  chalk: { weight: 45, zone: 1.35, holds: 5, text: 'Magnézium!', say: 'Suché ploutve!' },
+  fried: { weight: 20, text: 'Smažák! +1 život', full: 'Smažák! +3', say: 'Mňam!' },
+  beer: { weight: 35, points: 5, drift: 0.10, holds: 3, text: 'Pivo! +5', say: 'Na zdraví!' }
+};
+function rollItem() {
+  let r = Math.random() * 100;
+  for (const [k, v] of Object.entries(ITEMS)) { if ((r -= v.weight) < 0) return k; }
+  return 'chalk';
+}
+function ensureItems(upTo) {
+  while (G.nextItemAt <= upTo) {
+    G.items.set(G.nextItemAt, { type: rollItem(), state: 'wall', t: 0 });
+    G.nextItemAt += 8 + Math.floor(Math.random() * 8);
+  }
+}
+function itemPos(i) {
+  const side = hold(i).x < 0.5 ? 1 : -1;
+  return { x: holdX(i) + side * S * 0.42, y: holdY(i) - S * 0.08 };
+}
+function takeItem(i, it) {
+  const pos = itemPos(i), v = ITEMS[it.type];
+  it.state = 'taken';
+  let text = v.text;
+  if (it.type === 'chalk') G.fx.chalk = v.holds;
+  if (it.type === 'beer') { G.fx.beer = v.holds; G.bonus += v.points; }
+  if (it.type === 'fried') { if (G.lives < 3) G.lives++; else { G.bonus += 3; text = v.full; } }
+  updHUD();
+  floater(text, '#ffd23f', pos.x, pos.y - S * 0.3, 22);
+  chalk(pos.x, pos.y, 8, 90);
+  say(v.say, 1.3);
 }
 // each hold gets its zone somewhere new on the bar, kept fully inside it
 function zoneLimits(d) { const half = d.zone / 2 + 0.03; return [half, 1 - half]; }
@@ -600,7 +636,11 @@ function tap() {
   const d = moveDiff();
   const off = Math.abs(G.p - G.zc);
   if (off <= d.zone / 2) {
-    if (off <= d.perf) {
+    if (G.fx.chalk > 0) G.fx.chalk--;
+    if (G.fx.beer > 0) G.fx.beer--;
+    const it = G.items.get(G.cur + 1), perfect = off <= d.perf;
+    if (it && it.state === 'wall') { if (perfect) takeItem(G.cur + 1, it); else { it.state = 'lost'; it.t = 0; } }
+    if (perfect) {
       G.bonus += d.bonus; G.perfects++; G.face = 0.9;
       floater('PERFEKTNÍ! +' + d.bonus, '#3fd16b', holdX(G.cur + 1), holdY(G.cur + 1) - S * 0.35, 26);
       SFX.perfect(); vibrate(15);
@@ -860,6 +900,7 @@ function update(dt) {
   G.camY += (G.sy - G.camY) * Math.min(1, dt * follow);
   for (const p of G.particles) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 40 * dt; }
   G.particles = G.particles.filter(p => p.t < p.dur);
+  for (const it of G.items.values()) if (it.state === 'lost') it.t += dt;
   for (const f of G.floaters) f.t += dt;
   G.floaters = G.floaters.filter(f => f.t < f.dur);
   if (G.bubble) { G.bubble.t += dt; if (G.bubble.t > G.bubble.dur) G.bubble = null; }
@@ -1337,6 +1378,62 @@ function drawCrowd() {
     drawStranger(c, c.x, y);
   }
 }
+function drawItemIcon(type, x, y, r) {
+  ctx.save(); ctx.translate(x, y);
+  if (type === 'chalk') {
+    ctx.fillStyle = 'rgba(246,248,250,.55)';
+    for (const [dx, dy, rr2] of [[-0.5, -0.95, 0.22], [0.1, -1.15, 0.28], [0.55, -0.9, 0.2]]) { ctx.beginPath(); ctx.arc(dx * r, dy * r, rr2 * r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#f6f8fa'; rr(-0.62 * r, -0.55 * r, 1.24 * r, 1.2 * r, 0.38 * r); ctx.fill();
+    ctx.fillStyle = '#1fb5a5'; ctx.fillRect(-0.62 * r, -0.55 * r, 1.24 * r, 0.3 * r);
+    ctx.strokeStyle = 'rgba(29,43,58,.35)'; ctx.lineWidth = 1; rr(-0.62 * r, -0.55 * r, 1.24 * r, 1.2 * r, 0.38 * r); ctx.stroke();
+  } else if (type === 'fried') {
+    ctx.rotate(-0.2);
+    ctx.fillStyle = '#b8741f'; rr(-0.85 * r, -0.5 * r, 1.7 * r, 1.05 * r, 0.3 * r); ctx.fill();
+    ctx.fillStyle = '#e8a33a'; rr(-0.78 * r, -0.55 * r, 1.56 * r, 0.92 * r, 0.26 * r); ctx.fill();
+    ctx.fillStyle = 'rgba(120,70,15,.55)';
+    for (const [dx, dy] of [[-0.45, -0.2], [0.05, -0.3], [0.4, 0.05], [-0.15, 0.15]]) { ctx.beginPath(); ctx.arc(dx * r, dy * r, 0.08 * r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#f6f8fa'; ctx.beginPath(); ctx.ellipse(0.62 * r, 0.42 * r, 0.32 * r, 0.22 * r, 0.3, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.strokeStyle = 'rgba(246,248,250,.85)'; ctx.lineWidth = Math.max(1.5, 0.16 * r);
+    ctx.beginPath(); ctx.arc(0.55 * r, 0.05 * r, 0.32 * r, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+    ctx.fillStyle = '#f2b233'; rr(-0.55 * r, -0.5 * r, 1.1 * r, 1.25 * r, 0.16 * r); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(-0.4 * r, -0.35 * r, 0.16 * r, 0.95 * r);
+    ctx.fillStyle = '#fffbea';
+    for (const [dx, rr2] of [[-0.38, 0.26], [-0.05, 0.32], [0.32, 0.27]]) { ctx.beginPath(); ctx.arc(dx * r, -0.55 * r, rr2 * r, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+function drawItems() {
+  const [a, b] = visibleRange();
+  ensureItems(b);
+  const r = S * 0.17;
+  for (const [i, it] of G.items) {
+    if (i < a || i > b || it.state === 'taken') continue;
+    const pos = itemPos(i), y = toSY(pos.y);
+    if (it.state === 'lost') {
+      if (it.t > 1.2) continue;
+      ctx.globalAlpha = Math.max(0, 1 - it.t / 1.2);
+      drawItemIcon(it.type, pos.x + it.t * 30, y + 500 * it.t * it.t, r);
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    const bob = Math.sin(G.time * 3 + i) * 2.5, pulse = 0.5 + 0.5 * Math.sin(G.time * 4 + i);
+    ctx.fillStyle = 'rgba(255,210,63,' + (0.18 + pulse * 0.15) + ')';
+    ctx.beginPath(); ctx.arc(pos.x, y + bob, r * 1.5, 0, Math.PI * 2); ctx.fill();
+    drawItemIcon(it.type, pos.x, y + bob, r);
+  }
+}
+function drawEffects(b) {
+  const list = [['chalk', G.fx.chalk], ['beer', G.fx.beer]].filter(e => e[1] > 0);
+  let x = b.x + 4;
+  for (const [type, n] of list) {
+    ctx.fillStyle = 'rgba(14,26,38,.62)'; rr(x - 4, b.y - 50, 62, 30, 10); ctx.fill();
+    drawItemIcon(type, x + 13, b.y - 34, 10);
+    ctx.font = '800 15px "Baloo 2", system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f6f8fa'; ctx.fillText('×' + n, x + 28, b.y - 33);
+    x += 70;
+  }
+}
 function drawParticles() {
   for (const p of G.particles) {
     const u = p.t / p.dur;
@@ -1396,6 +1493,7 @@ function drawUI() {
     ctx.fillStyle = '#1d2b3a'; ctx.strokeStyle = '#f6f8fa'; ctx.lineWidth = 2;
     rr(px - 4, b.y - 8, 8, b.h + 16, 4); ctx.fill(); ctx.stroke();
     if (G.hint > 0) outlinedText('Ťukni, když je jezdec ve žluté', W / 2, b.y - 30, 18, '#f6f8fa');
+    else drawEffects(b);
   } else if (G.mode === 'clip' && G.clip) {
     const c = G.clip, left = Math.max(0, 1 - c.t / c.tl);
     const ty = safeT + 112;
@@ -1432,7 +1530,7 @@ function drawUI() {
 function draw() {
   ctx.save();
   if (G.shake > 0) ctx.translate((Math.random() - .5) * G.shake, (Math.random() - .5) * G.shake);
-  drawWall(); drawVolumes(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawBolts();
+  drawWall(); drawVolumes(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawItems(); drawBolts();
   drawRope(); drawSeal();
   if (G.mode === 'day' && G.day) drawCrowd();
   drawParticles(); drawFloaters(); drawBubble();
