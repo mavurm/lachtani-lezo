@@ -530,6 +530,7 @@ function reset() {
     clip: null, rest: null, shake: 0, tilt: null, zc: 0.5, zBase: 0.5, ease: 0,
     items: new Map(), nextItemAt: 6 + Math.floor(Math.random() * 10), fx: { chalk: 0, beer: 0 },
     pump: 100, hang: 0, pumpWarned: false,
+    eye: null, nextEyeAt: 15 + Math.floor(Math.random() * 6), wind: 0, nextGustAt: 0,
     day: null, nextDay: 12 + Math.floor(Math.random() * 15), flash: null, hint: gamesPlayed === 0 ? 3 : 0
   });
   updHUD();
@@ -675,16 +676,42 @@ function startMove(to) {
   G.mode = 'move'; G.pose = 'reach';
   G.anim = { to, t: 0, d: 0.3, x0: G.sx, y0: G.sy, x1: holdX(to), y1: holdY(to) };
 }
+/* Obstacles by sector: indoors a stranger dusts chalk into Adélka's eyes (a cloud hides part of the bar),
+   outside on the sandstone the wind comes in gusts and makes the slider speed up and slow down unevenly. */
+const EYE_LEN = 3.8;          // stranger arrives, cloud fades in, holds ~3 s, fades out
+const outdoors = i => wallAt(holdY(i)).kind === 'rock';
+function maybeEye(i) {
+  if (i < G.nextEyeAt || G.eye) return;
+  if (outdoors(i) || G.wind > 0) { G.nextEyeAt = i + 3; return; }
+  const side = holdX(i) < W / 2 ? 1 : -1;
+  G.eye = {
+    t: 0, from: Math.random() * 0.5, puffed: false,
+    c: { x: clamp(holdX(i) + side * S * 0.9, 40, W - 40), sc: 0.85, f: 10, o: 0, body: pick(STRANGER_BODY), helmet: pick(STRANGER_GEAR), harness: pick(STRANGER_GEAR), rope: pick(STRANGER_GEAR) }
+  };
+  G.nextEyeAt = i + 12 + Math.floor(Math.random() * 9);
+}
+function windStep(i) {
+  if (!outdoors(i)) { G.wind = 0; return; }
+  if (G.wind > 0) { G.wind--; return; }
+  if (i >= G.nextGustAt) {
+    G.wind = 3 + Math.floor(Math.random() * 2);
+    G.nextGustAt = i + G.wind + 6 + Math.floor(Math.random() * 5);
+    say('Fouká!', 1.1);
+    noise(0.9, 0.08, 500);
+  }
+}
+const windFactor = () => G.wind > 0 ? 1 + 0.45 * Math.sin(G.time * 3.1) * Math.sin(G.time * 1.37 + 1) : 1;
 function arrive(i) {
   G.cur = i;
   if (i > G.max) G.max = i;
+  windStep(i);
   newZone();
   updHUD();
   chalk(holdX(i), holdY(i), 4, 60);
   if (isBolt(i) && !G.clipped.has(i)) startClip(i);
   else if (i % 10 === 0 && i > G.lastRest) startRest(i);
   else if (i >= G.nextDay) startDay(i);
-  else { G.mode = 'climb'; G.pose = 'idle'; }
+  else { G.mode = 'climb'; G.pose = 'idle'; maybeEye(i); }
 }
 function startClip(i) {
   const h = harness();
@@ -699,7 +726,7 @@ function clipDone() {
   chalk(b.cx, b.cy, 6, 80);
   if (i % 10 === 0 && i > G.lastRest) startRest(i);
   else if (i >= G.nextDay) startDay(i);
-  else { G.mode = 'climb'; G.pose = 'idle'; }
+  else { G.mode = 'climb'; G.pose = 'idle'; maybeEye(i); }
 }
 function startRest(i) {
   G.lastRest = i; G.mode = 'rest'; G.rest = { t: 0, puff: 0 }; G.pose = 'rest';
@@ -876,7 +903,7 @@ function update(dt) {
       }
       if (G.pump < 25 && !G.pumpWarned) { G.pumpWarned = true; say('Pumpa!', 1.2); }
       if (G.pump > 40) G.pumpWarned = false;
-      G.p += G.dir * d.speed * dt;
+      G.p += G.dir * d.speed * windFactor() * dt;
       if (G.p > 1) { G.p = 2 - G.p; G.dir = -1; }
       if (G.p < 0) { G.p = -G.p; G.dir = 1; }
       G.sx = holdX(G.cur); G.sy = holdY(G.cur);
@@ -927,6 +954,16 @@ function update(dt) {
   for (const p of G.particles) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 40 * dt; }
   G.particles = G.particles.filter(p => p.t < p.dur);
   for (const it of G.items.values()) if (it.state === 'lost') it.t += dt;
+  if (G.eye) {
+    const e = G.eye; e.t += dt;
+    if (!e.puffed && e.t > 0.5) {
+      e.puffed = true;
+      chalk(G.sx, G.sy + 30 * K * SEAL, 18, 140);
+      say('Hej, to je do očí!', 1.6);
+      noise(0.25, 0.12, 1500);
+    }
+    if (e.t > EYE_LEN) G.eye = null;
+  }
   for (const f of G.floaters) f.t += dt;
   G.floaters = G.floaters.filter(f => f.t < f.dur);
   if (G.bubble) { G.bubble.t += dt; if (G.bubble.t > G.bubble.dur) G.bubble = null; }
@@ -1214,7 +1251,7 @@ function drawSeal() {
   const t = G.time, pose = G.pose;
   const x = G.sx + (G.mode === 'climb' && G.pump < 25 ? Math.sin(G.time * 45) * 1.6 : 0), y = toSY(G.sy);
   ctx.save(); ctx.translate(x, y); ctx.scale(K * SEAL, K * SEAL);
-  let tilt = Math.sin(t * 1.7) * 0.05;
+  let tilt = Math.sin(t * 1.7) * 0.05 + (G.wind > 0 ? Math.sin(t * 2.3) * 0.09 : 0);
   if (pose === 'fall') tilt = Math.sin(t * 18) * 0.15;
   if (G.tilt != null) tilt = G.tilt;
   ctx.rotate(tilt);
@@ -1516,6 +1553,17 @@ function drawUI() {
     ctx.fillStyle = '#ffd23f'; ctx.fillRect(b.x + (G.zc - d.zone / 2) * b.w, b.y, d.zone * b.w, b.h);
     ctx.fillStyle = '#3fd16b'; ctx.fillRect(b.x + (G.zc - d.perf) * b.w, b.y, Math.max(3, 2 * d.perf * b.w), b.h);
     ctx.restore();
+    if (G.eye && G.eye.t > 0.5) {
+      const e = G.eye, a = Math.min(1, (e.t - 0.5) / 0.3, (EYE_LEN - e.t) / 0.5);
+      const cx0 = b.x + e.from * b.w, cw = b.w * 0.5;
+      ctx.save(); ctx.globalAlpha = Math.max(0, a) * 0.96; ctx.fillStyle = '#f2f4f6';
+      rr(cx0, b.y - 6, cw, b.h + 12, 12); ctx.fill();
+      for (let k = 0; k < 7; k++) {
+        const bx = cx0 + cw * (k + 0.5) / 7, by = b.y + b.h / 2 + Math.sin(G.time * 2 + k * 1.7) * 4;
+        ctx.beginPath(); ctx.arc(bx, by, b.h * (0.75 + (k % 3) * 0.15), 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
     const px = b.x + G.p * b.w;
     ctx.fillStyle = '#1d2b3a'; ctx.strokeStyle = '#f6f8fa'; ctx.lineWidth = 2;
     rr(px - 4, b.y - 8, 8, b.h + 16, 4); ctx.fill(); ctx.stroke();
@@ -1560,6 +1608,20 @@ function draw() {
   drawWall(); drawVolumes(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawItems(); drawBolts();
   drawRope(); drawSeal();
   if (G.mode === 'day' && G.day) drawCrowd();
+  if (G.eye) {
+    const e = G.eye, wy = G.sy - S * 1.2 - (e.t < 0.5 ? (0.5 - e.t) * S * 4 : (e.t > 2.2 ? (e.t - 2.2) * S * 3 : 0));
+    drawStranger(e.c, e.c.x, toSY(wy));
+  }
+  if (G.wind > 0 && (G.mode === 'climb' || G.mode === 'move')) {
+    ctx.strokeStyle = 'rgba(246,248,250,.35)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let k = 0; k < 14; k++) {
+      const sp = 0.6 + (k % 5) * 0.18, len = 30 + (k % 4) * 18;
+      const x = ((G.time * sp * W + k * 137) % (W + 200)) - 100, y = (k * 97 + 40) % H;
+      ctx.moveTo(x, y); ctx.lineTo(x + len, y + Math.sin(G.time * 3 + k) * 3);
+    }
+    ctx.stroke();
+  }
   drawParticles(); drawFloaters(); drawBubble();
   ctx.restore();
   drawUI();
