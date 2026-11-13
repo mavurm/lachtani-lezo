@@ -1288,7 +1288,7 @@ function drawWall() {
   const top = G.camY - H * CAM, secLen = SECTION * S;
   const s0 = Math.max(0, Math.floor(-(top + H) / secLen)), s1 = Math.max(0, Math.floor(-top / secLen));
   for (let sec = s0; sec <= s1; sec++) {
-    const th = WALLS[sec % WALLS.length];
+    const th = G.route ? WALLS[sectorOf(G.route).wall] : WALLS[sec % WALLS.length];   // a route keeps its sector's wall all the way up
     const yA = sec === 0 ? H + 40 : -sec * secLen - top;
     const yB = -(sec + 1) * secLen - top;
     const y0 = Math.max(-20, yB), y1 = Math.min(H + 40, yA);
@@ -1299,7 +1299,7 @@ function drawWall() {
     ctx.fillStyle = g; ctx.fillRect(-20, y0, W + 40, y1 - y0);
     if (th.kind === 'rock') drawRock(top, y0, y1); else drawPanels(top, y0, y1, th);
     ctx.restore();
-    if (sec > 0 && yA > -10 && yA < H + 10) { ctx.fillStyle = 'rgba(10,18,26,.55)'; ctx.fillRect(0, yA - 3, W, 6); }
+    if (!G.route && sec > 0 && yA > -10 && yA < H + 10) { ctx.fillStyle = 'rgba(10,18,26,.55)'; ctx.fillRect(0, yA - 3, W, 6); }
   }
 }
 function drawPanels(top, y0, y1, th) {

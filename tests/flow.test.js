@@ -44,3 +44,12 @@ test('nekonečná stěna po cestě funguje jako dřív', () => {
   ok(A('bolts').length > 2, 'jištění se zase generují');
   ok([G.nextDay, G.nextEyeAt, G.nextItemAt].every(Number.isFinite), 'náhodné události se zase plánují');
 });
+test('cesta má po celé výšce stěnu svého sektoru', () => {
+  const G = A('G'), cv = A('cv'), cx = cv.getContext('2d'), dpr = cv.width / innerWidth;
+  const px = () => Array.from(cx.getImageData(Math.round(30 * dpr), Math.round(innerHeight * 0.3 * dpr), 1, 1).data).slice(0, 3);
+  A('startRoute')(A('ROUTES')[4]);           // Překližka: plywood
+  G.banner = null;
+  const look = i => { jumpTo(i); G.camY = G.sy; A('draw')(); return px(); };
+  const low = look(2), high = look(21);
+  ok(low[0] > low[2] && high[0] > high[2], 'dřevo je teplé (víc červené než modré) dole i nahoře: ' + low + ' / ' + high);
+});
