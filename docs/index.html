@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="description" content="Lachtanka Adélka leze nekonečnou stěnu. Pomoz jí vylézt, aby mohla na smažák a pivo.">
+<meta name="description" content="Lachtanka Adélka leze, aby mohla na smažák a pivo. Pomoz jí vylézt cesty v hale a na překližce, nebo zkus, jak vysoko vyleze na nekonečné stěně.">
 <meta name="theme-color" content="#22384d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -73,6 +73,7 @@ body{
   font-family:var(--font-display);font-weight:800;font-size:15px;line-height:1;
   background:rgba(14,26,38,.55);border-radius:999px;padding:6px 10px 4px;
   font-variant-numeric:tabular-nums;white-space:nowrap;text-shadow:none;
+  max-width:42vw;overflow:hidden;text-overflow:ellipsis;
 }
 .hud-btns{display:flex;gap:8px}
 .icon-btn{
@@ -152,6 +153,20 @@ h2{font-size:22px}
 .board-list .nick{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .board-list .pts{font-family:var(--font-display);font-weight:800;font-variant-numeric:tabular-nums}
 .board-list li.empty{display:block;background:none;color:var(--muted);font-weight:700;padding:4px 0}
+.guide-list{display:flex;flex-direction:column;gap:16px}
+.sector{display:flex;flex-direction:column;gap:6px}
+.sector-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.sector-head h3{margin:0;font-family:var(--font-display);font-weight:800;font-size:20px}
+.sector-head span{font-weight:800;color:var(--muted);font-variant-numeric:tabular-nums}
+.sector p{margin:0 0 2px;font-size:14px;color:var(--muted);font-weight:700}
+.route-row{display:grid;grid-template-columns:14px 1fr auto 4.2em;align-items:center;gap:10px;width:100%;min-height:48px;padding:6px 12px;border-radius:12px;border:2px solid #d5dde4;background:#fff;color:var(--ink);font:700 15px var(--font-body);text-align:left;cursor:pointer}
+.route-row:disabled{opacity:.5;cursor:default}
+.route-row:focus-visible{outline:3px solid var(--perfect);outline-offset:2px}
+.route-row .swatch{width:14px;height:14px;border-radius:4px}
+.route-row .rname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route-row .rgrade{font-family:var(--font-display);font-weight:800}
+.route-row .rstars{color:var(--hold);text-align:right;font-size:14px}
+.route-stars{margin:-4px 0 0;font-family:var(--font-display);font-size:38px;line-height:1;color:var(--hold);letter-spacing:.08em}
 @media (prefers-reduced-motion: reduce){ .life{transition:none} }
 </style>
 
@@ -184,7 +199,7 @@ h2{font-size:22px}
   <div class="card">
     <div class="tape"><span>Start</span><span>Cesta č. 1</span></div>
     <h1>Lachtanka Adélka na lézu</h1>
-    <p class="lead">Lachtanka Adélka leze nekonečnou stěnu. Pomoz jí tu nekonečnou stěnu vylézt, aby mohla na smažák a pivo.</p>
+    <p class="lead">Lachtanka Adélka leze, aby mohla na smažák a pivo. Pomoz jí vylézt cesty v hale a na překližce, nebo zkus, jak vysoko vyleze na nekonečné stěně.</p>
     <ul class="rules">
       <li><span class="dot" style="background:var(--perfect)"></span><span><b>Ťukni</b>, když je jezdec ve žluté zóně. Zelený střed je <b>perfektní chyt</b> a bod navíc.</span></li>
       <li><span class="dot" style="background:#5fb4ff"></span><span>Každých 3–6 chytů <b>táhni prstem lano</b> do karabiny.</span></li>
@@ -193,7 +208,8 @@ h2{font-size:22px}
     </ul>
     <p class="best-line">Tvůj rekord: <b id="menuBest">0</b></p>
     <div class="btns">
-      <button class="btn primary" id="play" type="button">Lézt!</button>
+      <button class="btn primary" id="routesBtn" type="button">Cesty</button>
+      <button class="btn" id="play" type="button">Nekonečná stěna</button>
       <button class="btn" id="showBoard" type="button">Žebříček</button>
     </div>
   </div>
@@ -232,6 +248,27 @@ h2{font-size:22px}
   </div>
 </div>
 
+<div class="overlay" id="guide" hidden>
+  <div class="card">
+    <div class="tape blue"><span>Průvodce</span><span id="guideStars">0 ★</span></div>
+    <h2>Cesty</h2>
+    <div class="guide-list" id="guideList"></div>
+    <div class="btns"><button class="btn" id="guideBack" type="button">Zpět</button></div>
+  </div>
+</div>
+<div class="overlay" id="routeEnd" hidden>
+  <div class="card">
+    <div class="tape"><span id="routeEndTape">Cesta</span><span>Výsledek</span></div>
+    <h2 id="routeEndTitle">Top!</h2>
+    <p class="route-stars" id="routeEndStars">★★★</p>
+    <p class="detail" id="routeEndDetail"></p>
+    <div class="btns">
+      <button class="btn primary" id="routeNext" type="button">Další cesta</button>
+      <button class="btn" id="routeRetry" type="button">Zkusit znovu</button>
+      <button class="btn" id="routeGuide" type="button">Průvodce</button>
+    </div>
+  </div>
+</div>
 <script src="zvuky.js"></script>
 <script>
 (() => {
@@ -489,7 +526,9 @@ let routeColor = ROUTE_COLORS[0];
 const HOLD_TYPES = ['jug', 'jug', 'crimp', 'sloper', 'pinch', 'pocket'];
 const VOL_COLORS = ['#d9d2c3', '#4a4f57', '#c4553a', '#2f7d6d', '#e0b84a'];
 const holds = [];
+const OFF_ROUTE = { x: 0.5, s: 0, r: 1, t: 'jug', none: true };   // above the top of a route
 function hold(i) {
+  if (G.route) return holds[i] || OFF_ROUTE;
   while (holds.length <= i) {
     const j = holds.length, side = j % 2 ? 1 : -1;
     holds.push({ x: j === 0 ? 0.5 : 0.5 + side * (0.05 + hr(j, 1) * 0.14), s: (hr(j, 2) * 100000) | 0, r: 0.85 + hr(j, 3) * 0.35, t: j <= 5 ? 'jug' : HOLD_TYPES[(hr(j, 4) * HOLD_TYPES.length) | 0] });
@@ -499,7 +538,7 @@ function hold(i) {
 const holdX = i => hold(i).x * W;
 const holdY = i => -i * S;
 const bolts = [0];
-function ensureBolts(i) { while (bolts[bolts.length - 1] < i + 8) bolts.push(bolts[bolts.length - 1] + (3 + Math.floor(hr(bolts.length, 7) * 4))); }
+function ensureBolts(i) { if (G.route) return; while (bolts[bolts.length - 1] < i + 8) bolts.push(bolts[bolts.length - 1] + (3 + Math.floor(hr(bolts.length, 7) * 4))); }
 function boltOrd(i) { ensureBolts(i); return bolts.indexOf(i); }
 const isBolt = i => i > 0 && boltOrd(i) >= 0;
 function boltPos(i) {
@@ -510,6 +549,7 @@ function boltPos(i) {
 }
 const REST_EASE = 4;  // every rest takes this many holds' worth of difficulty off for good
 function diff(i) {
+  if (G.route) i = GRADE_LEVEL[G.route.grade];   // a route has one fixed difficulty
   i = Math.max(0, i - (G.ease || 0));
   // gentle start, steady ramp that flattens out high on the wall
   const u = 1 - Math.exp(-i / 45);
@@ -522,6 +562,98 @@ function diff(i) {
   };
 }
 const gradeAt = i => GRADES[Math.min(GRADES.length - 1, Math.floor(i / 4))];
+/* ---------- routes (levels) ----------
+   A route is written as space-separated holds: type letter, x position in percent, then flags.
+   Types: J jug, C crimp, S sloper, P pinch, K pocket. Flags: b bolt, r rest, d climbing day, e chalk in the eyes,
+   w wind gust, x crux, o roof (overhang), y dyno onto this hold. Items after "!": c chalk, f fried cheese, p beer.
+   "__" is the gap a dyno jumps over. */
+const GRADE_LEVEL = { '4a': 0, '4c': 6, '5a': 10, '5b': 15, '5c': 20, '6a': 26, '6a+': 30, '6b': 36 };
+const SECTORS = [
+  { id: 'hala', name: 'Hala', desc: 'Začátky na modrých panelech. Madla, první cvaky a smažák.', wall: 0, need: 0 },
+  { id: 'preklizka', name: 'Překližka', desc: 'Dřevo, převisy a první dyno. Tady už to pumpuje.', wall: 1, need: 6 }
+];
+const HOLD_CODE = { J: 'jug', C: 'crimp', S: 'sloper', P: 'pinch', K: 'pocket' };
+const ITEM_CODE = { c: 'chalk', f: 'fried', p: 'beer' };
+const FLAG_CODE = [['b', 'bolt'], ['r', 'rest'], ['d', 'day'], ['e', 'eye'], ['w', 'wind'], ['x', 'crux'], ['o', 'roof'], ['y', 'dyno']];
+function parseHolds(str) {
+  return str.trim().split(/\s+/).map(tok => {
+    if (tok === '__') return { gap: true };
+    const m = /^([JCSPK])(\d\d)([brdewxoy]*)(?:!([cfp]))?$/.exec(tok);   // unknown flag letters are an error, not ignored
+    if (!m) throw new Error('Neznámý chyt: ' + tok);
+    const h = { t: HOLD_CODE[m[1]], x: +m[2] / 100 };
+    for (const [ch, key] of FLAG_CODE) if (m[3].includes(ch)) h[key] = true;
+    if (m[4]) h.item = ITEM_CODE[m[4]];
+    return h;
+  });
+}
+const ROUTES = [
+  { id: 'rozlez', name: 'Rozlez', grade: '4a', color: '#46c8ff', sector: 'hala',
+    holds: parseHolds('J50 J44 J56 J45 J55 J46b J54 J45 J56 J47 J53b J45 J55 J48 J52') },
+  { id: 'mnam-madla', name: 'Mňam madla', grade: '4c', color: '#7ae04b', sector: 'hala',
+    holds: parseHolds('J50 J44 J56 C45 J55b C44 J56!c C55 J45r J46b J55 C44 J56!f J45 C55b J46 J54 J50') },
+  { id: 'kedlubna', name: 'Kedlubna', grade: '5a', color: '#ffd23f', sector: 'hala',
+    holds: parseHolds('J50 J44 K56 J45 P55b K44 J56!c P45 J55b K46 J54r P45 K56 J45b P55 K44 J56 P45b J55 J50') },
+  { id: 'smazakova-spara', name: 'Smažákova spára', grade: '5b', color: '#ff7a2f', sector: 'hala',
+    holds: parseHolds('J50 J44 C56 J45 K55b J44 C56 P45 J55b K44 J56r!c C45 J55b J46!p C55 S44x S56xb S45x J55 J46r J55b K45 J55 J50') },
+  { id: 'previsla-kytara', name: 'Převislá kytara', grade: '5c', color: '#ff4fa3', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 J45 P55b J44 K56 J45r C55b J46o J54o C45o J55ob J46o C55 J45r K55b P45 J55 C46 J54b J50') },
+  { id: 'dobeeeer', name: 'Dobeeeer', grade: '6a', color: '#9b7bd6', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 K45 J55b P44 C56 J45 J55rb C44!c J56 __ J44y C55b P45 K56 J45 J55rb S44 C56 J45 P55b K44 J56 C45 J50b') },
+  { id: 'den-lezeni', name: 'Já říkal den lezení', grade: '6a+', color: '#f2a33a', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 P45 J55b K44 C56 J45!f S55b J44 J56d C45 P55b J44 K56 C45!c J55rb P44 S56x C45xe K55xb S44x J56r C45 J55b P44 J56 J50b') },
+  { id: 'pumpovaci-stroj', name: 'Pumpovací stroj', grade: '6b', color: '#e85f5f', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 P45 J55b K44 C56 J45 S55b J44r C56 J45!c C55ob P44o J56o C45o K55ob J44o C56o J45r J55b C44 J56 K45!f C55b S44x J56x __ J46xy C55b J45 J50b') }
+];
+const sectorOf = r => SECTORS.find(s => s.id === r.sector);
+const routesIn = sectorId => ROUTES.filter(r => r.sector === sectorId);
+// moves = holds you actually climb onto (not the start, not the gap under a dyno)
+const routeMoves = r => r.holds.filter((h, j) => j > 0 && !h.gap).length;
+function validateRoute(r) {
+  const out = [], hs = r.holds, last = hs.length - 1;
+  if (!(r.grade in GRADE_LEVEL)) out.push('neznámý stupeň ' + r.grade);
+  if (!SECTORS.some(s => s.id === r.sector)) out.push('neznámý sektor ' + r.sector);
+  if (hs.length < 10) out.push('cesta je moc krátká');
+  if (hs[0].gap || hs[0].t !== 'jug') out.push('start musí být madlo');
+  if (hs[last].gap) out.push('top nesmí být mezera');
+  if (!hs.some((h, j) => j > 0 && h.bolt)) out.push('chybí jištění');
+  hs.forEach((h, j) => {
+    if (h.gap) {
+      if (!(hs[j + 1] && hs[j + 1].dyno)) out.push('mezera ' + j + ' nemá za sebou dyno');
+      if (Object.keys(h).length > 1) out.push('mezera ' + j + ' nesmí mít značky');
+      return;
+    }
+    if (!['jug', 'crimp', 'sloper', 'pinch', 'pocket'].includes(h.t)) out.push('neznámý typ chytu ' + j);
+    if (h.x < 0.1 || h.x > 0.9) out.push('chyt ' + j + ' je mimo stěnu');
+    if (h.dyno && !(hs[j - 1] && hs[j - 1].gap)) out.push('dyno ' + j + ' nemá před sebou mezeru');
+    if (h.dyno && j < 3) out.push('dyno ' + j + ' je moc nízko');
+  });
+  return out;
+}
+const PROGRESS_KEY = 'adelka.routes';
+function loadProgress() {
+  try { return JSON.parse(store.get(PROGRESS_KEY, '{}')) || {}; } catch (e) { return {}; }
+}
+function saveRouteStars(id, stars) {
+  const p = loadProgress();
+  if (stars > (p[id] || 0)) { p[id] = stars; store.set(PROGRESS_KEY, JSON.stringify(p)); }
+  return p;
+}
+// ★ topped out, ★★ at most one fall, ★★★ no fall and at least a third of the moves perfect
+function routeStars(falls, perfects, moves) {
+  if (falls === 0 && perfects * 3 >= moves) return 3;
+  return falls <= 1 ? 2 : 1;
+}
+const sectorStars = (sectorId, prog) => routesIn(sectorId).reduce((n, r) => n + (prog[r.id] || 0), 0);
+function isSectorUnlocked(sector, prog) {
+  const i = SECTORS.indexOf(sector);
+  return i <= 0 || sectorStars(SECTORS[i - 1].id, prog) >= sector.need;
+}
+function isRouteUnlocked(route, prog) {
+  if (!isSectorUnlocked(sectorOf(route), prog)) return false;
+  const list = routesIn(route.sector), k = list.indexOf(route);
+  return k === 0 || (prog[list[k - 1].id] || 0) >= 1;
+}
+const nextRoute = r => ROUTES[ROUTES.indexOf(r) + 1] || null;
 
 /* ---------- state ---------- */
 const FALL_WORDS = ['Aaaa!', 'Juuu!', 'Chyť mě!', 'Ups!', 'Padám!'];
@@ -535,6 +667,7 @@ const G = {};
 let bestScore = parseInt(store.get('adelka.best', '0'), 10) || 0;
 let gamesPlayed = 0;
 function reset() {
+  G.route = null;
   seed = (Math.random() * 1e9) | 0;
   holds.length = 0; bolts.length = 1;
   routeColor = pick(ROUTE_COLORS);
@@ -547,7 +680,7 @@ function reset() {
     clip: null, rest: null, shake: 0, tilt: null, zc: 0.5, zBase: 0.5, ease: 0,
     items: new Map(), nextItemAt: 6 + Math.floor(Math.random() * 10), fx: { chalk: 0, beer: 0 },
     pump: 100, hang: 0, pumpWarned: false,
-    mara: null,
+    mara: null, route: null, falls: 0, banner: null, done: new Set(),
     eye: null, nextEyeAt: 15 + Math.floor(Math.random() * 6), wind: 0, nextGustAt: 0,
     day: null, nextDay: 12 + Math.floor(Math.random() * 15), flash: null, hint: gamesPlayed === 0 ? 3 : 0
   });
@@ -562,9 +695,13 @@ function updHUD() {
   const score = G.max + G.bonus;
   $('score').textContent = score;
   $('bestHud').textContent = 'rekord ' + Math.max(bestScore, score);
+  $('bestHud').hidden = !!G.route;   // the record belongs to the endless wall
   document.querySelectorAll('.life').forEach((el, i) => el.classList.toggle('lost', i >= G.lives));
   $('lives').setAttribute('aria-label', 'Zbývající pokusy: ' + G.lives);
-  $('grade').textContent = gradeAt(G.cur) + ' · ' + Math.round(G.cur * METERS_PER_HOLD) + ' m';
+  $('grade').textContent = G.route
+    // the count goes first, so a long route name is what gets cut off
+    ? G.route.holds.slice(1, G.cur + 1).filter(h => !h.gap).length + '/' + routeMoves(G.route) + ' · ' + G.route.name
+    : gradeAt(G.cur) + ' · ' + Math.round(G.cur * METERS_PER_HOLD) + ' m';
 }
 function say(text, dur) { G.bubble = { text, t: 0, dur: dur || 1.4 }; }
 function floater(text, col, wx, wy, size) { G.floaters.push({ text, col, x: wx, y: wy, t: 0, dur: 0.9, size: size || 24 }); }
@@ -583,11 +720,20 @@ const HOLD_MODS = {
   pinch: { drift: 0.12 },             // the zone sways along the bar
   pocket: { zone: 0.6, bonus: 2 }     // small, but a perfect hit pays double
 };
+// overhang on a route: faster slider, every hold costs more, hanging drains faster
+const ROOF = { speed: 1.2, cost: 1.5, drain: 2 };
+const isRoof = i => !!(G.route && hold(i).src && hold(i).src.roof);
+const isDyno = i => !!(G.route && hold(i).src && hold(i).src.dyno);
+const isCrux = i => !!(G.route && hold(i).src && hold(i).src.crux);
+// the hold the next move goes to: over a gap that is the dyno hold two up
+const nextIdx = () => hold(G.cur + 1).gap ? G.cur + 2 : G.cur + 1;
 function moveDiff() {
-  const i = G.cur + 1, d = diff(i), m = HOLD_MODS[hold(i).t] || {}, fx = G.fx || {};
+  const i = nextIdx(), d = diff(i), m = HOLD_MODS[hold(i).t] || {}, fx = G.fx || {};
   const zone = Math.min(0.6, d.zone * (m.zone || 1) * (fx.chalk > 0 ? ITEMS.chalk.zone : 1));
   const drift = (m.drift || 0) + (fx.beer > 0 ? ITEMS.beer.drift : 0);
-  return { speed: d.speed * (m.speed || 1), zone, perf: Math.max(0.014, zone * 0.18), drift, bonus: m.bonus || 1 };
+  const perf = Math.max(0.014, zone * 0.18);
+  // a dyno only goes with a perfect hit: the yellow zone shrinks to the green centre
+  return { speed: d.speed * (m.speed || 1) * (isRoof(i) ? ROOF.speed : 1), zone: isDyno(i) ? perf * 2 : zone, perf, drift, bonus: m.bonus || 1 };
 }
 /* Pump: forearm strength. Every hold costs some, a perfect hit costs half and gives a little back;
    hanging is free for about five round trips of the slider, then it slowly drains. */
@@ -659,31 +805,143 @@ function startGame() {
   setMusicLevel(1);
   G.mode = 'climb';
   gamesPlayed++;
-  $('menu').hidden = true; $('over').hidden = true; $('boardView').hidden = true; $('hud').hidden = false;
+  for (const id of ['menu', 'over', 'boardView', 'guide', 'routeEnd']) { const el = $(id); if (el) el.hidden = true; }
+  $('hud').hidden = false;
   $('submitBtn').disabled = false; $('boardStatus').textContent = '';
   say('Lezuuu!', 1.3);
   try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
 }
+// a route replaces the generated wall: holds, bolts and items come from its notation, nothing random happens
+function setupRoute(route) {
+  G.route = route;
+  holds.length = 0;
+  route.holds.forEach((h, j) => holds.push({
+    x: h.gap ? 0.5 : h.x, s: (hr(j, 2) * 100000) | 0, r: 0.85 + hr(j, 3) * 0.35,
+    t: h.t || 'jug', gap: !!h.gap, src: h
+  }));
+  bolts.length = 0; bolts.push(0);
+  route.holds.forEach((h, j) => { if (h.bolt && j > 0) bolts.push(j); });
+  G.items = new Map();
+  route.holds.forEach((h, j) => { if (h.item) G.items.set(j, { type: h.item, state: 'wall', t: 0 }); });
+  G.nextItemAt = Infinity; G.nextEyeAt = Infinity; G.nextGustAt = Infinity; G.nextDay = Infinity;
+  G.hint = 0;
+  routeColor = route.color;
+  G.sx = holdX(0); G.sy = holdY(0); G.camY = holdY(0);
+  G.banner = { t: 0, title: route.name, sub: route.grade };
+}
+function startRoute(route) {
+  startGame();
+  setupRoute(route);
+  newZone();
+  updHUD();
+}
+function renderGuide() {
+  const prog = loadProgress(), list = $('guideList');
+  list.textContent = '';
+  let total = 0;
+  for (const s of SECTORS) {
+    const open = isSectorUnlocked(s, prog), got = sectorStars(s.id, prog), routes = routesIn(s.id);
+    total += got;
+    const sec = document.createElement('section'); sec.className = 'sector';
+    const head = document.createElement('div'); head.className = 'sector-head';
+    const h3 = document.createElement('h3'); h3.textContent = s.name;
+    const cnt = document.createElement('span'); cnt.textContent = got + '/' + routes.length * 3 + ' ★';
+    head.append(h3, cnt);
+    const p = document.createElement('p');
+    p.textContent = open ? s.desc : 'Odemkne se za ' + s.need + ' ★ z předchozího sektoru.';
+    sec.append(head, p);
+    for (const r of routes) {
+      const unlocked = isRouteUnlocked(r, prog), st = prog[r.id] || 0;
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'route-row'; b.disabled = !unlocked; b.dataset.route = r.id;
+      const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = r.color;
+      const nm = document.createElement('span'); nm.className = 'rname'; nm.textContent = r.name;
+      const gr = document.createElement('span'); gr.className = 'rgrade'; gr.textContent = r.grade;
+      const sts = document.createElement('span'); sts.className = 'rstars';
+      sts.textContent = unlocked ? '★'.repeat(st) + '☆'.repeat(3 - st) : 'zamčeno';
+      b.append(sw, nm, gr, sts);
+      b.addEventListener('click', () => startRoute(r));
+      sec.append(b);
+    }
+    list.append(sec);
+  }
+  $('guideStars').textContent = total + ' ★';
+}
+function openGuide() {
+  renderGuide();
+  for (const id of ['menu', 'over', 'routeEnd', 'hud']) { const el = $(id); if (el) el.hidden = true; }
+  $('guide').hidden = false;
+}
+// the sign at the foot of a route: its name and grade, shown for a moment at the start
+function drawBanner() {
+  const bn = G.banner;
+  if (!bn) return;
+  const a = Math.min(1, bn.t / 0.25, (2.2 - bn.t) / 0.4);
+  const w = Math.min(W - 48, 300), x = (W - w) / 2, y = safeT + 120;
+  ctx.save(); ctx.globalAlpha = Math.max(0, a);
+  ctx.fillStyle = '#f6f8fa'; rr(x, y, w, 74, 14); ctx.fill();
+  ctx.fillStyle = G.route ? G.route.color : '#ff7a2f'; rr(x, y, w, 16, 8); ctx.fill(); ctx.fillRect(x, y + 8, w, 8);
+  ctx.fillStyle = '#1d2b3a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '800 24px "Baloo 2", system-ui, sans-serif'; ctx.fillText(bn.title, W / 2, y + 40);
+  ctx.font = '800 15px Nunito, system-ui, sans-serif'; ctx.fillText(bn.sub, W / 2, y + 62);
+  ctx.restore();
+}
+let lastRoute = null;
+function routeTop() {
+  G.mode = 'top'; G.topT = 0; G.pose = 'sheepish'; G.face = 1.5;
+  say('Top!', 1.4);
+  maraSay(['Kedlubna!'], 0.3);
+  if (G.lastClip !== G.cur) SFX.clip();   // clipping the lower-off (unless the top bolt was just clipped)
+  SFX.start();
+  floater('TOP!', '#ffd23f', holdX(G.cur), holdY(G.cur) - S * 0.5, 34);
+  chalk(G.sx, G.sy, 14, 120);
+}
+// after the top Mára lowers her straight to the mat
+function lowerFromTop() {
+  const hOff = 94 * K * SEAL, y0 = G.sy + hOff;
+  G.mode = 'fall';
+  G.anim = { t: 0, phase: 'lower', top: true, lc: G.lastClip, hOff, hx: G.sx, hy: y0, x0: G.sx, y0, gy: hOff, dl: Math.max(0.6, (hOff - y0) / (S * 14)) };
+  SFX.lower();
+  maraSay(MARA.lower, 0.2);
+}
+function routeFinish(ok) {
+  const r = G.route;
+  lastRoute = r;
+  G.mode = 'over'; G.pose = 'sheepish';
+  if (!ok) SFX.over();
+  setMusicLevel(0.35); setMusicLevel(1, 3);
+  const moves = routeMoves(r), stars = ok ? routeStars(G.falls, G.perfects, moves) : 0;
+  const prog = ok ? saveRouteStars(r.id, stars) : loadProgress(), next = nextRoute(r);
+  $('routeEndTape').textContent = r.name + ' · ' + r.grade;
+  $('routeEndTitle').textContent = ok ? 'Top!' : 'Neprošlo to';
+  $('routeEndStars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  $('routeEndStars').hidden = !ok;
+  $('routeEndDetail').textContent = 'pády: ' + G.falls + ' · perfektní chyty: ' + G.perfects + ' z ' + moves;
+  $('routeNext').hidden = !(ok && next && isRouteUnlocked(next, prog));
+  // only if this very route is still the one that ended (not a new game started in the meantime)
+  setTimeout(() => { if (G.mode === 'over' && G.route === r) { $('routeEnd').hidden = false; $('hud').hidden = true; } }, 700);
+}
 function tap() {
   if (G.mode !== 'climb') return;
-  const d = moveDiff();
+  const d = moveDiff(), to = nextIdx();
   const off = Math.abs(G.p - G.zc);
   if (off <= d.zone / 2) {
     if (G.fx.chalk > 0) G.fx.chalk--;
     if (G.fx.beer > 0) G.fx.beer--;
-    const it = G.items.get(G.cur + 1), perfect = off <= d.perf;
-    if (it && it.state === 'wall') { if (perfect) takeItem(G.cur + 1, it); else { it.state = 'lost'; it.t = 0; } }
+    const it = G.items.get(to), perfect = off <= d.perf;
+    if (it && it.state === 'wall') { if (perfect) takeItem(to, it); else { it.state = 'lost'; it.t = 0; } }
     if (perfect) {
       G.bonus += d.bonus; G.perfects++; G.face = 0.9;
-      floater('PERFEKTNÍ! +' + d.bonus, '#3fd16b', holdX(G.cur + 1), holdY(G.cur + 1) - S * 0.35, 26);
+      floater('PERFEKTNÍ! +' + d.bonus, '#3fd16b', holdX(to), holdY(to) - S * 0.35, 26);
       SFX.perfect(); vibrate(15);
     } else SFX.grab();
     G.flash = { c: '#3fd16b', t: .25 };
     if (G.hint > 0) G.hint--;
-    const cost = PUMP_COST[hold(G.cur + 1).t] || 8;
+    const cost = (PUMP_COST[hold(to).t] || 8) * (isRoof(to) ? ROOF.cost : 1);
     G.pump = Math.min(100, G.pump - (perfect ? cost / 2 - PUMP_PERFECT_BACK : cost));
     if (G.pump <= 0) { pumpedOff(); return; }
-    startMove(G.cur + 1);
+    if (isDyno(to)) maraSay(['Hezky!'], 0.4);
+    startMove(to);
   } else {
     G.flash = { c: '#e63946', t: .4 };
     SFX.miss(); say(pick(FALL_WORDS), 1);
@@ -692,7 +950,7 @@ function tap() {
 }
 function startMove(to) {
   G.mode = 'move'; G.pose = 'reach';
-  G.anim = { to, t: 0, d: 0.3, x0: G.sx, y0: G.sy, x1: holdX(to), y1: holdY(to) };
+  G.anim = { to, t: 0, d: isDyno(to) ? 0.55 : 0.3, x0: G.sx, y0: G.sy, x1: holdX(to), y1: holdY(to) };
 }
 /* Obstacles by sector: indoors a stranger dusts chalk into Adélka's eyes (a cloud hides part of the bar),
    outside on the sandstone the wind comes in gusts and makes the slider speed up and slow down unevenly. */
@@ -701,33 +959,54 @@ const outdoors = i => wallAt(holdY(i)).kind === 'rock';
 function maybeEye(i) {
   if (i < G.nextEyeAt || G.eye) return;
   if (outdoors(i) || G.wind > 0) { G.nextEyeAt = i + 3; return; }
+  startEye(i);
+  G.nextEyeAt = i + 12 + Math.floor(Math.random() * 9);
+}
+function startEye(i) {
   const side = holdX(i) < W / 2 ? 1 : -1;
   G.eye = {
     t: 0, from: Math.random() * 0.5, puffed: false,
     c: { x: clamp(holdX(i) + side * S * 0.9, 40, W - 40), sc: 0.85, f: 10, o: 0, body: pick(STRANGER_BODY), helmet: pick(STRANGER_GEAR), harness: pick(STRANGER_GEAR), rope: pick(STRANGER_GEAR) }
   };
-  G.nextEyeAt = i + 12 + Math.floor(Math.random() * 9);
 }
 function windStep(i) {
   if (!outdoors(i)) { G.wind = 0; return; }
   if (G.wind > 0) { G.wind--; return; }
   if (i >= G.nextGustAt) {
-    G.wind = 3 + Math.floor(Math.random() * 2);
+    startGust();
     G.nextGustAt = i + G.wind + 6 + Math.floor(Math.random() * 5);
-    say('Fouká!', 1.1);
-    noise(0.9, 0.08, 500);
   }
+}
+function startGust() {
+  G.wind = 3 + Math.floor(Math.random() * 2);
+  say('Fouká!', 1.1);
+  noise(0.9, 0.08, 500);
 }
 const windFactor = () => G.wind > 0 ? 1 + 0.45 * Math.sin(G.time * 3.1) * Math.sin(G.time * 1.37 + 1) : 1;
 function arrive(i) {
   G.cur = i;
   if (i > G.max) G.max = i;
-  windStep(i);
+  if (G.route) { if (G.wind > 0) G.wind--; } else windStep(i);
   newZone();
   updHUD();
   chalk(holdX(i), holdY(i), 4, 60);
   if (isBolt(i) && !G.clipped.has(i)) startClip(i);
-  else if (i % 10 === 0 && i > G.lastRest) startRest(i);
+  else afterHold(i);
+}
+// once Adélka holds on: on a route the hold's own marks decide, on the endless wall the usual rhythm
+function afterHold(i) {
+  if (G.route) {
+    const h = hold(i).src || {};
+    if (i > 0 && isRoof(i - 1) && !isRoof(i)) say('Uf!', 1.1);
+    if (i === G.route.holds.length - 1) { routeTop(); return; }
+    if (h.rest && i > G.lastRest) { startRest(i); return; }
+    if (h.day && !G.done.has('day' + i)) { G.done.add('day' + i); startDay(i); return; }
+    G.mode = 'climb'; G.pose = 'idle';
+    if (h.eye && !G.done.has('eye' + i)) { G.done.add('eye' + i); startEye(i); }
+    if (h.wind && !G.done.has('wind' + i)) { G.done.add('wind' + i); startGust(); }
+    return;
+  }
+  if (i % 10 === 0 && i > G.lastRest) startRest(i);
   else if (i >= G.nextDay) startDay(i);
   else { G.mode = 'climb'; G.pose = 'idle'; maybeEye(i); }
 }
@@ -743,9 +1022,7 @@ function clipDone() {
   maraSay(MARA.clip, 0.3);
   floater('Cvak!', '#ffffff', b.cx, b.cy - 20 * K, 24);
   chalk(b.cx, b.cy, 6, 80);
-  if (i % 10 === 0 && i > G.lastRest) startRest(i);
-  else if (i >= G.nextDay) startDay(i);
-  else { G.mode = 'climb'; G.pose = 'idle'; maybeEye(i); }
+  afterHold(i);
 }
 function startRest(i) {
   G.lastRest = i; G.mode = 'rest'; G.rest = { t: 0, puff: 0 }; G.pose = 'rest';
@@ -779,7 +1056,7 @@ function startDay(i) {
   maraSay(MARA.day, 2.3);
 }
 function startFall() {
-  G.lives--; updHUD();
+  G.lives--; G.falls++; updHUD();
   SFX.fall(); vibrate([30, 40, 90]);
   G.mode = 'fall'; G.clip = null;
   const lc = G.lastClip, hOff = 94 * K * SEAL;
@@ -851,7 +1128,7 @@ function updateFall(dt) {
     if (u >= 1) { caught(a); a.phase = 'landed'; a.t = 0; }
   } else if (a.phase === 'landed') {
     G.pose = 'sheepish';
-    if (a.t > 0.5) { G.anim = null; G.tilt = null; G.sx = holdX(0); G.sy = holdY(0); gameOver(); return; }
+    if (a.t > 0.5) { G.anim = null; G.tilt = null; G.sx = holdX(0); G.sy = holdY(0); if (a.top) routeFinish(true); else gameOver(); return; }
   } else if (a.phase === 'ground') {
     G.pose = 'sheepish';
     if (a.t > 0.7) { endFall(); return; }
@@ -869,6 +1146,7 @@ function endFall() {
 }
 let lastScore = 0;
 function gameOver() {
+  if (G.route) { routeFinish(false); return; }
   G.mode = 'over'; G.pose = 'sheepish';
   SFX.over();
   setMusicLevel(0.35); setMusicLevel(1, 3);
@@ -919,6 +1197,11 @@ $('again').addEventListener('click', startGame);
 $('toMenu').addEventListener('click', () => { reset(); $('over').hidden = true; $('hud').hidden = true; $('menu').hidden = false; });
 $('showBoard').addEventListener('click', () => { $('menu').hidden = true; $('boardView').hidden = false; renderBoard(); });
 $('closeBoard').addEventListener('click', () => { $('boardView').hidden = true; $('menu').hidden = false; });
+$('routesBtn').addEventListener('click', openGuide);
+$('guideBack').addEventListener('click', () => { $('guide').hidden = true; $('menu').hidden = false; });
+$('routeNext').addEventListener('click', () => startRoute(nextRoute(lastRoute)));
+$('routeRetry').addEventListener('click', () => startRoute(lastRoute));
+$('routeGuide').addEventListener('click', openGuide);
 
 /* ---------- update ---------- */
 function update(dt) {
@@ -929,7 +1212,7 @@ function update(dt) {
       if (d.drift) { const [lo, hi] = zoneLimits(d); G.zc = clamp(G.zBase + d.drift * Math.sin(G.time * 2.4), lo, hi); }
       G.hang += dt;
       if (G.hang > PUMP_GRACE_TRIPS * 2 / d.speed) {
-        G.pump -= PUMP_DRAIN * dt;
+        G.pump -= PUMP_DRAIN * (isRoof(G.cur) ? ROOF.drain : 1) * dt;
         if (G.pump <= 0) { pumpedOff(); break; }
       }
       if (G.pump < 25 && !G.pumpWarned) { G.pumpWarned = true; say('Pumpa!', 1.2); }
@@ -964,6 +1247,11 @@ function update(dt) {
     case 'fall':
       updateFall(dt);
       break;
+    case 'top':
+      G.topT += dt;
+      G.sx = holdX(G.cur); G.sy = holdY(G.cur);
+      if (G.topT > 1.6) lowerFromTop();
+      break;
     case 'day': {
       const d = G.day; d.t += dt; d.puff -= dt;
       G.sx = holdX(G.cur); G.sy = holdY(G.cur);
@@ -971,7 +1259,7 @@ function update(dt) {
       if (!d.said && d.t > 1.9) { d.said = true; say(pick(DAY_WORDS), 2.2); }
       if (d.t >= DAY_LEN) {
         G.day = null;
-        G.nextDay = G.cur + 15 + Math.floor(Math.random() * 16);
+        if (!G.route) G.nextDay = G.cur + 15 + Math.floor(Math.random() * 16);   // routes plan their days themselves
         finishRest();
       }
       break;
@@ -999,6 +1287,7 @@ function update(dt) {
   G.floaters = G.floaters.filter(f => f.t < f.dur);
   if (G.bubble) { G.bubble.t += dt; if (G.bubble.t > G.bubble.dur) G.bubble = null; }
   if (G.mara) { G.mara.t += dt; if (G.mara.t > G.mara.dur) G.mara = null; }
+  if (G.banner) { G.banner.t += dt; if (G.banner.t > 2.2) G.banner = null; }
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 30);
   if (G.flash) { G.flash.t -= dt; if (G.flash.t <= 0) G.flash = null; }
   if (G.face > 0) G.face -= dt;
@@ -1013,12 +1302,12 @@ const WALLS = [
   { a: '#b98a62', b: '#9a6f4c', nut: null, seam: null, kind: 'rock' }
 ];
 const SECTION = 20;   // holds per wall section
-const wallAt = wy => WALLS[Math.max(0, Math.floor(-wy / (SECTION * S))) % WALLS.length];
+const wallAt = wy => G.route ? WALLS[sectorOf(G.route).wall] : WALLS[Math.max(0, Math.floor(-wy / (SECTION * S))) % WALLS.length];
 function drawWall() {
   const top = G.camY - H * CAM, secLen = SECTION * S;
   const s0 = Math.max(0, Math.floor(-(top + H) / secLen)), s1 = Math.max(0, Math.floor(-top / secLen));
   for (let sec = s0; sec <= s1; sec++) {
-    const th = WALLS[sec % WALLS.length];
+    const th = G.route ? WALLS[sectorOf(G.route).wall] : WALLS[sec % WALLS.length];   // a route keeps its sector's wall all the way up
     const yA = sec === 0 ? H + 40 : -sec * secLen - top;
     const yB = -(sec + 1) * secLen - top;
     const y0 = Math.max(-20, yB), y1 = Math.min(H + 40, yA);
@@ -1029,7 +1318,7 @@ function drawWall() {
     ctx.fillStyle = g; ctx.fillRect(-20, y0, W + 40, y1 - y0);
     if (th.kind === 'rock') drawRock(top, y0, y1); else drawPanels(top, y0, y1, th);
     ctx.restore();
-    if (sec > 0 && yA > -10 && yA < H + 10) { ctx.fillStyle = 'rgba(10,18,26,.55)'; ctx.fillRect(0, yA - 3, W, 6); }
+    if (!G.route && sec > 0 && yA > -10 && yA < H + 10) { ctx.fillStyle = 'rgba(10,18,26,.55)'; ctx.fillRect(0, yA - 3, W, 6); }
   }
 }
 function drawPanels(top, y0, y1, th) {
@@ -1105,6 +1394,24 @@ function drawVolumes() {
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.closePath(); ctx.fill();
     }
     ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(ax, ay, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+// overhangs: a darker, shaded band of wall with a light top lip and a dark bottom edge
+function drawRoofs() {
+  if (!G.route) return;
+  const hs = G.route.holds;
+  for (let a = 0; a < hs.length; a++) {
+    if (!hs[a].roof || (a > 0 && hs[a - 1].roof)) continue;
+    let b = a;
+    while (b + 1 < hs.length && hs[b + 1].roof) b++;
+    const yTop = toSY(holdY(b) - S * 0.55), yBot = toSY(holdY(a) + S * 0.55);
+    if (yBot < -20 || yTop > H + 20) continue;
+    ctx.fillStyle = 'rgba(5,12,20,.32)'; ctx.fillRect(0, yTop, W, yBot - yTop);
+    const g = ctx.createLinearGradient(0, yTop, 0, yTop + S * 0.5);
+    g.addColorStop(0, 'rgba(5,12,20,.45)'); g.addColorStop(1, 'rgba(5,12,20,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, yTop, W, S * 0.5);
+    ctx.fillStyle = 'rgba(246,248,250,.35)'; ctx.fillRect(0, yTop - 2, W, 3);
+    ctx.fillStyle = 'rgba(5,12,20,.6)'; ctx.fillRect(0, yBot - 3, W, 6);
   }
 }
 function drawGround() {
@@ -1191,9 +1498,11 @@ function drawRoute() {
   const [a, b] = visibleRange();
   for (let i = a; i <= b; i++) {
     const h = hold(i), x = holdX(i), y = toSY(holdY(i));
-    if (i === G.cur + 1 && (G.mode === 'climb' || G.mode === 'clip' || G.mode === 'rest' || G.mode === 'day')) {
+    if (h.gap || h.none) continue;
+    if (i === nextIdx() && (G.mode === 'climb' || G.mode === 'clip' || G.mode === 'rest' || G.mode === 'day')) {
       const pulse = 0.5 + 0.5 * Math.sin(G.time * 5);
-      ctx.strokeStyle = 'rgba(246,248,250,' + (0.35 + pulse * 0.4) + ')'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = (isDyno(i) ? 'rgba(255,138,31,' : 'rgba(246,248,250,') + (0.35 + pulse * 0.4) + ')';
+      ctx.lineWidth = isDyno(i) ? 4 : 2.5;
       ctx.beginPath(); ctx.arc(x, y, S * 0.16 * h.r * (1.55 + pulse * 0.15), 0, Math.PI * 2); ctx.stroke();
     }
     drawHold(x, y, S * 0.16 * h.r * (i === 0 ? 1.2 : 1), routeColor, h.s, 1, h.t, true);
@@ -1202,6 +1511,13 @@ function drawRoute() {
       ctx.fillStyle = routeColor; ctx.fillRect(-26, -8, 52, 16);
       ctx.fillStyle = '#1d2b3a'; ctx.font = '800 11px Nunito, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('START', 0, 1);
+      ctx.restore();
+    }
+    if (G.route && i === G.route.holds.length - 1) {
+      ctx.save(); ctx.translate(x, y - S * 0.32); ctx.rotate(0.06);
+      ctx.fillStyle = routeColor; ctx.fillRect(-20, -8, 40, 16);
+      ctx.fillStyle = '#1d2b3a'; ctx.font = '800 11px Nunito, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('TOP', 0, 1);
       ctx.restore();
     }
   }
@@ -1282,13 +1598,15 @@ function flipper(x0, y0, x1, y1) {
 }
 function drawSeal() {
   const t = G.time, pose = G.pose;
-  const x = G.sx + (G.mode === 'climb' && G.pump < 25 ? Math.sin(G.time * 45) * 1.6 : 0), y = toSY(G.sy);
+  const x = G.sx + (G.mode === 'climb' && G.pump < 25 ? Math.sin(G.time * 45) * 1.6 : 0), y = toSY(G.sy) + (G.mode === 'climb' && isDyno(nextIdx()) ? 6 * K : 0);   // crouches before a dyno
   ctx.save(); ctx.translate(x, y); ctx.scale(K * SEAL, K * SEAL);
   let tilt = Math.sin(t * 1.7) * 0.05 + (G.wind > 0 ? Math.sin(t * 2.3) * 0.09 : 0);
   if (pose === 'fall') tilt = Math.sin(t * 18) * 0.15;
   if (G.tilt != null) tilt = G.tilt;
+  const roofPose = isRoof(G.cur) && G.mode !== 'fall';   // not while falling off or being lowered
+  if (G.tilt == null && roofPose) tilt += 0.1 + Math.sin(t * 1.5) * 0.06;
   ctx.rotate(tilt);
-  const kick = pose === 'fall' ? Math.sin(t * 22) * 0.5 : (pose === 'reach' ? 0.3 : Math.sin(t * 2.3) * 0.08);
+  const kick = pose === 'fall' ? Math.sin(t * 22) * 0.5 : (pose === 'reach' ? 0.3 : Math.sin(t * (roofPose ? 3.2 : 2.3)) * (roofPose ? 0.35 : 0.08));
   for (const s of [-1, 1]) {
     ctx.save(); ctx.translate(s * 15, 121); ctx.scale(s, 1); ctx.rotate(kick * 0.35);
     ctx.fillStyle = '#7d8a96'; ctx.beginPath(); ctx.ellipse(-2, -11, 7, 11, 0.25, 0, Math.PI * 2); ctx.fill();
@@ -1833,6 +2151,7 @@ function drawUI() {
     rr(px - 4, b.y - 8, 8, b.h + 16, 4); ctx.fill(); ctx.stroke();
     if (G.hint > 0) outlinedText('Ťukni, když je jezdec ve žluté', W / 2, b.y - 30, 18, '#f6f8fa');
     else drawEffects(b);
+    if (isCrux(nextIdx())) outlinedText('Klíčové místo', W / 2, b.y - 64, 16, '#ffd23f');
   } else if (G.mode === 'clip' && G.clip) {
     const c = G.clip, left = Math.max(0, 1 - c.t / c.tl);
     const ty = safeT + 112;
@@ -1869,7 +2188,7 @@ function drawUI() {
 function draw() {
   ctx.save();
   if (G.shake > 0) ctx.translate((Math.random() - .5) * G.shake, (Math.random() - .5) * G.shake);
-  drawWall(); drawVolumes(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawItems(); drawBolts();
+  drawWall(); drawVolumes(); drawRoofs(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawItems(); drawBolts();
   drawBelayer(); drawRope(); drawSeal();
   if (G.mode === 'day' && G.day) drawCrowd();
   if (G.eye) {
@@ -1890,6 +2209,7 @@ function draw() {
   ctx.restore();
   drawUI();
   drawMara();
+  drawBanner();
 }
 let last = performance.now();
 function frame(now) {
