@@ -701,11 +701,14 @@ const HOLD_MODS = {
   pinch: { drift: 0.12 },             // the zone sways along the bar
   pocket: { zone: 0.6, bonus: 2 }     // small, but a perfect hit pays double
 };
+// overhang on a route: faster slider, every hold costs more, hanging drains faster
+const ROOF = { speed: 1.2, cost: 1.5, drain: 2 };
+const isRoof = i => !!(G.route && hold(i).src && hold(i).src.roof);
 function moveDiff() {
   const i = G.cur + 1, d = diff(i), m = HOLD_MODS[hold(i).t] || {}, fx = G.fx || {};
   const zone = Math.min(0.6, d.zone * (m.zone || 1) * (fx.chalk > 0 ? ITEMS.chalk.zone : 1));
   const drift = (m.drift || 0) + (fx.beer > 0 ? ITEMS.beer.drift : 0);
-  return { speed: d.speed * (m.speed || 1), zone, perf: Math.max(0.014, zone * 0.18), drift, bonus: m.bonus || 1 };
+  return { speed: d.speed * (m.speed || 1) * (isRoof(i) ? ROOF.speed : 1), zone, perf: Math.max(0.014, zone * 0.18), drift, bonus: m.bonus || 1 };
 }
 /* Pump: forearm strength. Every hold costs some, a perfect hit costs half and gives a little back;
    hanging is free for about five round trips of the slider, then it slowly drains. */
@@ -907,7 +910,7 @@ function tap() {
     } else SFX.grab();
     G.flash = { c: '#3fd16b', t: .25 };
     if (G.hint > 0) G.hint--;
-    const cost = PUMP_COST[hold(G.cur + 1).t] || 8;
+    const cost = (PUMP_COST[hold(G.cur + 1).t] || 8) * (isRoof(G.cur + 1) ? ROOF.cost : 1);
     G.pump = Math.min(100, G.pump - (perfect ? cost / 2 - PUMP_PERFECT_BACK : cost));
     if (G.pump <= 0) { pumpedOff(); return; }
     startMove(G.cur + 1);
@@ -966,6 +969,7 @@ function arrive(i) {
 function afterHold(i) {
   if (G.route) {
     const h = hold(i).src || {};
+    if (i > 0 && isRoof(i - 1) && !isRoof(i)) say('Uf!', 1.1);
     if (i === G.route.holds.length - 1) { routeTop(); return; }
     if (h.rest && i > G.lastRest) { startRest(i); return; }
     if (h.day && !G.done.has('day' + i)) { G.done.add('day' + i); startDay(i); return; }
@@ -1180,7 +1184,7 @@ function update(dt) {
       if (d.drift) { const [lo, hi] = zoneLimits(d); G.zc = clamp(G.zBase + d.drift * Math.sin(G.time * 2.4), lo, hi); }
       G.hang += dt;
       if (G.hang > PUMP_GRACE_TRIPS * 2 / d.speed) {
-        G.pump -= PUMP_DRAIN * dt;
+        G.pump -= PUMP_DRAIN * (isRoof(G.cur) ? ROOF.drain : 1) * dt;
         if (G.pump <= 0) { pumpedOff(); break; }
       }
       if (G.pump < 25 && !G.pumpWarned) { G.pumpWarned = true; say('Pumpa!', 1.2); }
@@ -1362,6 +1366,24 @@ function drawVolumes() {
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.closePath(); ctx.fill();
     }
     ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(ax, ay, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+// overhangs: a darker, shaded band of wall with a light top lip and a dark bottom edge
+function drawRoofs() {
+  if (!G.route) return;
+  const hs = G.route.holds;
+  for (let a = 0; a < hs.length; a++) {
+    if (!hs[a].roof || (a > 0 && hs[a - 1].roof)) continue;
+    let b = a;
+    while (b + 1 < hs.length && hs[b + 1].roof) b++;
+    const yTop = toSY(holdY(b) - S * 0.55), yBot = toSY(holdY(a) + S * 0.55);
+    if (yBot < -20 || yTop > H + 20) continue;
+    ctx.fillStyle = 'rgba(5,12,20,.32)'; ctx.fillRect(0, yTop, W, yBot - yTop);
+    const g = ctx.createLinearGradient(0, yTop, 0, yTop + S * 0.5);
+    g.addColorStop(0, 'rgba(5,12,20,.45)'); g.addColorStop(1, 'rgba(5,12,20,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, yTop, W, S * 0.5);
+    ctx.fillStyle = 'rgba(246,248,250,.35)'; ctx.fillRect(0, yTop - 2, W, 3);
+    ctx.fillStyle = 'rgba(5,12,20,.6)'; ctx.fillRect(0, yBot - 3, W, 6);
   }
 }
 function drawGround() {
@@ -1552,8 +1574,9 @@ function drawSeal() {
   let tilt = Math.sin(t * 1.7) * 0.05 + (G.wind > 0 ? Math.sin(t * 2.3) * 0.09 : 0);
   if (pose === 'fall') tilt = Math.sin(t * 18) * 0.15;
   if (G.tilt != null) tilt = G.tilt;
+  else if (isRoof(G.cur) && pose !== 'fall') tilt += 0.1 + Math.sin(t * 1.5) * 0.06;
   ctx.rotate(tilt);
-  const kick = pose === 'fall' ? Math.sin(t * 22) * 0.5 : (pose === 'reach' ? 0.3 : Math.sin(t * 2.3) * 0.08);
+  const kick = pose === 'fall' ? Math.sin(t * 22) * 0.5 : (pose === 'reach' ? 0.3 : Math.sin(t * (isRoof(G.cur) ? 3.2 : 2.3)) * (isRoof(G.cur) ? 0.35 : 0.08));
   for (const s of [-1, 1]) {
     ctx.save(); ctx.translate(s * 15, 121); ctx.scale(s, 1); ctx.rotate(kick * 0.35);
     ctx.fillStyle = '#7d8a96'; ctx.beginPath(); ctx.ellipse(-2, -11, 7, 11, 0.25, 0, Math.PI * 2); ctx.fill();
@@ -2134,7 +2157,7 @@ function drawUI() {
 function draw() {
   ctx.save();
   if (G.shake > 0) ctx.translate((Math.random() - .5) * G.shake, (Math.random() - .5) * G.shake);
-  drawWall(); drawVolumes(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawItems(); drawBolts();
+  drawWall(); drawVolumes(); drawRoofs(); drawGround(); drawTicks(); drawDecor(); drawRoute(); drawItems(); drawBolts();
   drawBelayer(); drawRope(); drawSeal();
   if (G.mode === 'day' && G.day) drawCrowd();
   if (G.eye) {
