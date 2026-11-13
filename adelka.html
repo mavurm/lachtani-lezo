@@ -572,6 +572,31 @@ function validateRoute(r) {
   });
   return out;
 }
+const PROGRESS_KEY = 'adelka.routes';
+function loadProgress() {
+  try { return JSON.parse(store.get(PROGRESS_KEY, '{}')) || {}; } catch (e) { return {}; }
+}
+function saveRouteStars(id, stars) {
+  const p = loadProgress();
+  if (stars > (p[id] || 0)) { p[id] = stars; store.set(PROGRESS_KEY, JSON.stringify(p)); }
+  return p;
+}
+// ★ topped out, ★★ at most one fall, ★★★ no fall and at least a third of the moves perfect
+function routeStars(falls, perfects, moves) {
+  if (falls === 0 && perfects * 3 >= moves) return 3;
+  return falls <= 1 ? 2 : 1;
+}
+const sectorStars = (sectorId, prog) => routesIn(sectorId).reduce((n, r) => n + (prog[r.id] || 0), 0);
+function isSectorUnlocked(sector, prog) {
+  const i = SECTORS.indexOf(sector);
+  return i <= 0 || sectorStars(SECTORS[i - 1].id, prog) >= sector.need;
+}
+function isRouteUnlocked(route, prog) {
+  if (!isSectorUnlocked(sectorOf(route), prog)) return false;
+  const list = routesIn(route.sector), k = list.indexOf(route);
+  return k === 0 || (prog[list[k - 1].id] || 0) >= 1;
+}
+const nextRoute = r => ROUTES[ROUTES.indexOf(r) + 1] || null;
 
 /* ---------- state ---------- */
 const FALL_WORDS = ['Aaaa!', 'Juuu!', 'Chyť mě!', 'Ups!', 'Padám!'];
