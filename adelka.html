@@ -872,7 +872,8 @@ function routeTop() {
   G.mode = 'top'; G.topT = 0; G.pose = 'sheepish'; G.face = 1.5;
   say('Top!', 1.4);
   maraSay(['Kedlubna!'], 0.3);
-  SFX.clip(); SFX.start();   // clipping the lower-off, then the fanfare
+  if (G.lastClip !== G.cur) SFX.clip();   // clipping the lower-off (unless the top bolt was just clipped)
+  SFX.start();
   floater('TOP!', '#ffd23f', holdX(G.cur), holdY(G.cur) - S * 0.5, 34);
   chalk(G.sx, G.sy, 14, 120);
 }
@@ -898,7 +899,8 @@ function routeFinish(ok) {
   $('routeEndStars').hidden = !ok;
   $('routeEndDetail').textContent = 'pády: ' + G.falls + ' · perfektní chyty: ' + G.perfects + ' z ' + moves;
   $('routeNext').hidden = !(ok && next && isRouteUnlocked(next, prog));
-  setTimeout(() => { if (G.mode === 'over') { $('routeEnd').hidden = false; $('hud').hidden = true; } }, 700);
+  // only if this very route is still the one that ended (not a new game started in the meantime)
+  setTimeout(() => { if (G.mode === 'over' && G.route === r) { $('routeEnd').hidden = false; $('hud').hidden = true; } }, 700);
 }
 function tap() {
   if (G.mode !== 'climb') return;
@@ -1582,9 +1584,10 @@ function drawSeal() {
   let tilt = Math.sin(t * 1.7) * 0.05 + (G.wind > 0 ? Math.sin(t * 2.3) * 0.09 : 0);
   if (pose === 'fall') tilt = Math.sin(t * 18) * 0.15;
   if (G.tilt != null) tilt = G.tilt;
-  else if (isRoof(G.cur) && pose !== 'fall') tilt += 0.1 + Math.sin(t * 1.5) * 0.06;
+  const roofPose = isRoof(G.cur) && G.mode !== 'fall';   // not while falling off or being lowered
+  if (G.tilt == null && roofPose) tilt += 0.1 + Math.sin(t * 1.5) * 0.06;
   ctx.rotate(tilt);
-  const kick = pose === 'fall' ? Math.sin(t * 22) * 0.5 : (pose === 'reach' ? 0.3 : Math.sin(t * (isRoof(G.cur) ? 3.2 : 2.3)) * (isRoof(G.cur) ? 0.35 : 0.08));
+  const kick = pose === 'fall' ? Math.sin(t * 22) * 0.5 : (pose === 'reach' ? 0.3 : Math.sin(t * (roofPose ? 3.2 : 2.3)) * (roofPose ? 0.35 : 0.08));
   for (const s of [-1, 1]) {
     ctx.save(); ctx.translate(s * 15, 121); ctx.scale(s, 1); ctx.rotate(kick * 0.35);
     ctx.fillStyle = '#7d8a96'; ctx.beginPath(); ctx.ellipse(-2, -11, 7, 11, 0.25, 0, Math.PI * 2); ctx.fill();

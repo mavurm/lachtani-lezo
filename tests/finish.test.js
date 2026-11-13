@@ -25,15 +25,34 @@ test('3 pády = Neprošlo to a nic se neuloží', async () => {
     step(6);
   }
   eq(G.mode, 'over');
+  eq(G.falls, 3);
   await sleep(800);
+  eq(A('$')('over').hidden, true, 'konec nekonečné stěny se neukáže');
   eq(A('$')('routeEndTitle').textContent, 'Neprošlo to');
   eq(A('$')('routeEndStars').hidden, true);
   eq(A('$')('routeNext').hidden, true);
   eq(A('loadProgress')(), {});
 });
 test('Zkusit znovu spustí stejnou cestu od začátku', () => {
+  A('startRoute')(A('ROUTES')[0]);
+  jumpTo(6); A('G').falls = 1;
+  A('routeFinish')(false);
   A('$')('routeRetry').click();
   eq(A('G').route.id, 'rozlez');
   eq(A('G').cur, 0);
   eq(A('G').falls, 0);
+});
+test('nekonečná stěna po 3 pádech ukáže svůj konec, ne výsledek cesty', async () => {
+  const G = A('G');
+  A('startGame')();
+  for (let k = 0; k < 3 && G.mode !== 'over'; k++) {
+    for (let w = 0; w < 200 && G.mode !== 'climb' && G.mode !== 'over'; w++) step(0.1);
+    G.p = G.zc > 0.5 ? 0.01 : 0.99; A('tap')();
+    step(6);
+  }
+  eq(G.mode, 'over');
+  await sleep(1000);
+  eq(A('$')('over').hidden, false);
+  eq(A('$')('routeEnd').hidden, true);
+  A('$')('over').hidden = true;
 });

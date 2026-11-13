@@ -17,7 +17,7 @@ test('visení v převisu ubírá sílu 2× rychleji', () => {
   A('startRoute')(A('ROUTES')[4]);
   jumpTo(10); G.pump = 80; G.hang = 999;
   A('update')(1);
-  eq(+(80 - G.pump).toFixed(1), 6);
+  eq(+(80 - G.pump).toFixed(1), +(A('PUMP_DRAIN') * A('ROOF').drain).toFixed(1));
 });
 test('mimo převis se nic nemění', () => {
   A('startRoute')(A('ROUTES')[4]);
