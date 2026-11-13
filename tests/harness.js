@@ -28,6 +28,8 @@ async function runTests() {
   for (const t of TESTS) {
     try { await t.fn(); res.push('PASS ' + t.name); }
     catch (e) { res.push('FAIL ' + t.name + ': ' + e.message); }
+    // every test starts from a clean game, whatever the previous one left behind
+    try { A('reset')(); } catch (e) {}
   }
   window.TEST_RESULT = res;
   window.TEST_DONE = true;

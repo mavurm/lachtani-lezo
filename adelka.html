@@ -1096,7 +1096,7 @@ function update(dt) {
       if (!d.said && d.t > 1.9) { d.said = true; say(pick(DAY_WORDS), 2.2); }
       if (d.t >= DAY_LEN) {
         G.day = null;
-        G.nextDay = G.cur + 15 + Math.floor(Math.random() * 16);
+        if (!G.route) G.nextDay = G.cur + 15 + Math.floor(Math.random() * 16);   // routes plan their days themselves
         finishRest();
       }
       break;

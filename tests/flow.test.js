@@ -20,7 +20,7 @@ test('vylepšení a odpočinek podle zápisu', () => {
 test('na cestě se nic nespouští náhodně', () => {
   const R = A('ROUTES'), G = A('G');
   A('startRoute')(R[0]);
-  eq([G.nextDay, G.nextEyeAt, G.nextGustAt, G.nextItemAt], [Infinity, Infinity, Infinity, Infinity]);
+  ok([G.nextDay, G.nextEyeAt, G.nextGustAt, G.nextItemAt].every(v => v === Infinity), 'nic náhodného se neplánuje');
   jumpTo(9); G.p = G.zc; A('tap')(); step(0.7);
   eq(G.cur, 10); ok(G.mode === 'clip', 'chyt 10 má jištění');
   A('clipDone')();
@@ -40,4 +40,7 @@ test('nekonečná stěna po cestě funguje jako dřív', () => {
   ok(A('hold')(30).t && !A('hold')(30).none, 'náhodné chyty');
   ok(A('diff')(30).speed > 0.5, 'obtížnost roste s výškou');
   ok(/ m$/.test(A('$')('grade').textContent), 'HUD ukazuje metry');
+  A('ensureBolts')(30);
+  ok(A('bolts').length > 2, 'jištění se zase generují');
+  ok([G.nextDay, G.nextEyeAt, G.nextItemAt].every(Number.isFinite), 'náhodné události se zase plánují');
 });
