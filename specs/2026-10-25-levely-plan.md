@@ -24,6 +24,7 @@
 - Ladicí háček `window.__adelka` se nikdy nesmí dostat do `adelka.html` – patří jen do `tests/test.html`.
 - Commit zprávy česky a končí řádkem `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Publikace (artifact na claude.ai, `docs/` + push na GitHub) až v posledním úkolu a až po souhlasu uživatele.
+- Nahrávky jsou v `zvuky.js` vedle hry (`<script src="zvuky.js"></script>` v `adelka.html`); ten soubor se v tomto plánu nemění.
 
 ## Jak spouštět testy (platí pro všechny úkoly)
 
@@ -63,6 +64,8 @@ game = io.open(os.path.join(ROOT, 'adelka.html'), encoding='utf-8').read()
 marker = '/* ---------- boot ---------- */'
 assert game.count(marker) == 1, 'boot marker missing'
 game = game.replace(marker, 'window.__adelka = n => eval(n);\n' + marker)
+# the test page lives in tests/, the recordings next to the game
+game = game.replace('<script src="zvuky.js"></script>', '<script src="../zvuky.js"></script>')
 parts = [io.open(os.path.join(ROOT, 'tests', 'harness.js'), encoding='utf-8').read()]
 for f in sorted(glob.glob(os.path.join(ROOT, 'tests', '*.test.js'))):
     parts.append(io.open(f, encoding='utf-8').read())
@@ -805,7 +808,7 @@ za
       <button class="btn primary" id="routesBtn" type="button">Cesty</button>
       <button class="btn" id="play" type="button">Nekonečná stěna</button>
 ```
-Těsně před řádek `<script id="adelka-sounds">` vložit:
+Těsně před řádek `<script src="zvuky.js"></script>` vložit:
 ```html
 <div class="overlay" id="guide" hidden>
   <div class="card">
@@ -992,7 +995,7 @@ Expected: nové testy `FAIL` (`routeTop is not defined` při dolezení).
 
 - [ ] **Step 3: HTML a CSS výsledku**
 
-Těsně před řádek `<script id="adelka-sounds">` vložit:
+Těsně před řádek `<script src="zvuky.js"></script>` vložit:
 ```html
 <div class="overlay" id="routeEnd" hidden>
   <div class="card">
@@ -1536,8 +1539,8 @@ Ukázat uživateli shrnutí a nechat ho hru vyzkoušet v Browser pane. Publikova
 
 ```bash
 python tools/make_web.py
-git add adelka.html docs/index.html
+git add adelka.html docs/index.html docs/zvuky.js
 git commit -m "Levely: průvodce, 8 cest, převis a dyno" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 git push
 ```
-Pak Artifact tool: publish `C:\Users\mavur\Desktop\Claude\Lachtan na lézu\adelka.html` (stejný soubor jako dřív, bez nových capabilities).
+Pak Artifact tool: publish `C:\Users\mavur\Desktop\Claude\Lachtan na lézu\adelka.html` s `files: {"zvuky.js": "C:\Users\mavur\Desktop\Claude\Lachtan na lézu\zvuky.js"}` (bez nových capabilities).
