@@ -505,6 +505,73 @@ function diff(i) {
   };
 }
 const gradeAt = i => GRADES[Math.min(GRADES.length - 1, Math.floor(i / 4))];
+/* ---------- routes (levels) ----------
+   A route is written as space-separated holds: type letter, x position in percent, then flags.
+   Types: J jug, C crimp, S sloper, P pinch, K pocket. Flags: b bolt, r rest, d climbing day, e chalk in the eyes,
+   w wind gust, x crux, o roof (overhang), y dyno onto this hold. Items after "!": c chalk, f fried cheese, p beer.
+   "__" is the gap a dyno jumps over. */
+const GRADE_LEVEL = { '4a': 0, '4c': 6, '5a': 10, '5b': 15, '5c': 20, '6a': 26, '6a+': 30, '6b': 36 };
+const SECTORS = [
+  { id: 'hala', name: 'Hala', desc: 'Začátky na modrých panelech. Madla, první cvaky a smažák.', wall: 0, need: 0 },
+  { id: 'preklizka', name: 'Překližka', desc: 'Dřevo, převisy a první dyno. Tady už to pumpuje.', wall: 1, need: 6 }
+];
+const HOLD_CODE = { J: 'jug', C: 'crimp', S: 'sloper', P: 'pinch', K: 'pocket' };
+const ITEM_CODE = { c: 'chalk', f: 'fried', p: 'beer' };
+const FLAG_CODE = [['b', 'bolt'], ['r', 'rest'], ['d', 'day'], ['e', 'eye'], ['w', 'wind'], ['x', 'crux'], ['o', 'roof'], ['y', 'dyno']];
+function parseHolds(str) {
+  return str.trim().split(/\s+/).map(tok => {
+    if (tok === '__') return { gap: true };
+    const m = /^([JCSPK])(\d\d)([a-z]*)(?:!([cfp]))?$/.exec(tok);
+    if (!m) throw new Error('Neznámý chyt: ' + tok);
+    const h = { t: HOLD_CODE[m[1]], x: +m[2] / 100 };
+    for (const [ch, key] of FLAG_CODE) if (m[3].includes(ch)) h[key] = true;
+    if (m[4]) h.item = ITEM_CODE[m[4]];
+    return h;
+  });
+}
+const ROUTES = [
+  { id: 'rozlez', name: 'Rozlez', grade: '4a', color: '#46c8ff', sector: 'hala',
+    holds: parseHolds('J50 J44 J56 J45 J55 J46b J54 J45 J56 J47 J53b J45 J55 J48 J52') },
+  { id: 'mnam-madla', name: 'Mňam madla', grade: '4c', color: '#7ae04b', sector: 'hala',
+    holds: parseHolds('J50 J44 J56 C45 J55b C44 J56!c C55 J45r J46b J55 C44 J56!f J45 C55b J46 J54 J50') },
+  { id: 'kedlubna', name: 'Kedlubna', grade: '5a', color: '#ffd23f', sector: 'hala',
+    holds: parseHolds('J50 J44 K56 J45 P55b K44 J56!c P45 J55b K46 J54r P45 K56 J45b P55 K44 J56 P45b J55 J50') },
+  { id: 'smazakova-spara', name: 'Smažákova spára', grade: '5b', color: '#ff7a2f', sector: 'hala',
+    holds: parseHolds('J50 J44 C56 J45 K55b J44 C56 P45 J55b K44 J56r!c C45 J55b J46!p C55 S44x S56xb S45x J55 J46r J55b K45 J55 J50') },
+  { id: 'previsla-kytara', name: 'Převislá kytara', grade: '5c', color: '#ff4fa3', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 J45 P55b J44 K56 J45r C55b J46o J54o C45o J55ob J46o C55 J45r K55b P45 J55 C46 J54b J50') },
+  { id: 'dobeeeer', name: 'Dobeeeer', grade: '6a', color: '#9b7bd6', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 K45 J55b P44 C56 J45 J55rb C44!c J56 __ J44y C55b P45 K56 J45 J55rb S44 C56 J45 P55b K44 J56 C45 J50b') },
+  { id: 'den-lezeni', name: 'Já říkal den lezení', grade: '6a+', color: '#f2a33a', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 P45 J55b K44 C56 J45!f S55b J44 J56d C45 P55b J44 K56 C45!c J55rb P44 S56x C45xe K55xb S44x J56r C45 J55b P44 J56 J50b') },
+  { id: 'pumpovaci-stroj', name: 'Pumpovací stroj', grade: '6b', color: '#e85f5f', sector: 'preklizka',
+    holds: parseHolds('J50 J44 C56 P45 J55b K44 C56 J45 S55b J44r C56 J45!c C55ob P44o J56o C45o K55ob J44o C56o J45r J55b C44 J56 K45!f C55b S44x J56x __ J46xy C55b J45 J50b') }
+];
+const sectorOf = r => SECTORS.find(s => s.id === r.sector);
+const routesIn = sectorId => ROUTES.filter(r => r.sector === sectorId);
+// moves = holds you actually climb onto (not the start, not the gap under a dyno)
+const routeMoves = r => r.holds.filter((h, j) => j > 0 && !h.gap).length;
+function validateRoute(r) {
+  const out = [], hs = r.holds, last = hs.length - 1;
+  if (!(r.grade in GRADE_LEVEL)) out.push('neznámý stupeň ' + r.grade);
+  if (!SECTORS.some(s => s.id === r.sector)) out.push('neznámý sektor ' + r.sector);
+  if (hs.length < 10) out.push('cesta je moc krátká');
+  if (hs[0].gap || hs[0].t !== 'jug') out.push('start musí být madlo');
+  if (hs[last].gap) out.push('top nesmí být mezera');
+  if (!hs.some((h, j) => j > 0 && h.bolt)) out.push('chybí jištění');
+  hs.forEach((h, j) => {
+    if (h.gap) {
+      if (!(hs[j + 1] && hs[j + 1].dyno)) out.push('mezera ' + j + ' nemá za sebou dyno');
+      if (Object.keys(h).length > 1) out.push('mezera ' + j + ' nesmí mít značky');
+      return;
+    }
+    if (!['jug', 'crimp', 'sloper', 'pinch', 'pocket'].includes(h.t)) out.push('neznámý typ chytu ' + j);
+    if (h.x < 0.1 || h.x > 0.9) out.push('chyt ' + j + ' je mimo stěnu');
+    if (h.dyno && !(hs[j - 1] && hs[j - 1].gap)) out.push('dyno ' + j + ' nemá před sebou mezeru');
+    if (h.dyno && j < 3) out.push('dyno ' + j + ' je moc nízko');
+  });
+  return out;
+}
 
 /* ---------- state ---------- */
 const FALL_WORDS = ['Aaaa!', 'Juuu!', 'Chyť mě!', 'Ups!', 'Padám!'];
