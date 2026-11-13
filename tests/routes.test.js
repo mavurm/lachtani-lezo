@@ -12,6 +12,11 @@ test('parser odmítne neznámý chyt', () => {
   try { A('parseHolds')('J50 Q33'); } catch (e) { err = e; }
   ok(err && /Q33/.test(err.message), 'chyba zmiňuje špatný token');
 });
+test('parser odmítne neznámou značku', () => {
+  let err = null;
+  try { A('parseHolds')('J50 J44c'); } catch (e) { err = e; }
+  ok(err && /J44c/.test(err.message), 'překlep ve značce není tiše ignorován');
+});
 test('cesty odpovídají návrhu', () => {
   eq(A('ROUTES').map(r => [r.id, r.grade, r.sector, r.holds.length]), [
     ['rozlez', '4a', 'hala', 15],

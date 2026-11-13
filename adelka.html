@@ -521,7 +521,7 @@ const FLAG_CODE = [['b', 'bolt'], ['r', 'rest'], ['d', 'day'], ['e', 'eye'], ['w
 function parseHolds(str) {
   return str.trim().split(/\s+/).map(tok => {
     if (tok === '__') return { gap: true };
-    const m = /^([JCSPK])(\d\d)([a-z]*)(?:!([cfp]))?$/.exec(tok);
+    const m = /^([JCSPK])(\d\d)([brdewxoy]*)(?:!([cfp]))?$/.exec(tok);   // unknown flag letters are an error, not ignored
     if (!m) throw new Error('Neznámý chyt: ' + tok);
     const h = { t: HOLD_CODE[m[1]], x: +m[2] / 100 };
     for (const [ch, key] of FLAG_CODE) if (m[3].includes(ch)) h[key] = true;
