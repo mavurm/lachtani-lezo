@@ -37,5 +37,5 @@ test('klíčové místo je označené', () => {
 test('počítadlo tahů nepočítá mezeru pod dynem', () => {
   A('startRoute')(A('ROUTES')[5]);
   jumpTo(12); A('updHUD')();
-  eq(A('$')('grade').textContent, 'Dobeeeer · 11/24');
+  eq(A('$')('grade').textContent, '11/24 · Dobeeeer');
 });

@@ -56,7 +56,7 @@ body{
   font-family:var(--font-display);font-weight:800;font-size:15px;line-height:1;
   background:rgba(14,26,38,.55);border-radius:999px;padding:6px 10px 4px;
   font-variant-numeric:tabular-nums;white-space:nowrap;text-shadow:none;
-  max-width:46vw;overflow:hidden;text-overflow:ellipsis;
+  max-width:42vw;overflow:hidden;text-overflow:ellipsis;
 }
 .hud-btns{display:flex;gap:8px}
 .icon-btn{
@@ -678,10 +678,12 @@ function updHUD() {
   const score = G.max + G.bonus;
   $('score').textContent = score;
   $('bestHud').textContent = 'rekord ' + Math.max(bestScore, score);
+  $('bestHud').hidden = !!G.route;   // the record belongs to the endless wall
   document.querySelectorAll('.life').forEach((el, i) => el.classList.toggle('lost', i >= G.lives));
   $('lives').setAttribute('aria-label', 'Zbývající pokusy: ' + G.lives);
   $('grade').textContent = G.route
-    ? G.route.name + ' · ' + G.route.holds.slice(1, G.cur + 1).filter(h => !h.gap).length + '/' + routeMoves(G.route)
+    // the count goes first, so a long route name is what gets cut off
+    ? G.route.holds.slice(1, G.cur + 1).filter(h => !h.gap).length + '/' + routeMoves(G.route) + ' · ' + G.route.name
     : gradeAt(G.cur) + ' · ' + Math.round(G.cur * METERS_PER_HOLD) + ' m';
 }
 function say(text, dur) { G.bubble = { text, t: 0, dur: dur || 1.4 }; }

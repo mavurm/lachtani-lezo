@@ -7,7 +7,7 @@ test('start cesty postaví stěnu podle zápisu', () => {
   eq(G.items.size, 0);
   ok(A('hold')(40).none, 'nad topem žádné chyty');
   eq(A('diff')(12).speed, 0.5, 'obtížnost 4a je pevná');
-  eq(A('$')('grade').textContent, 'Rozlez · 0/14');
+  eq(A('$')('grade').textContent, '0/14 · Rozlez');
 });
 test('vylepšení a odpočinek podle zápisu', () => {
   const R = A('ROUTES'), G = A('G');
@@ -52,4 +52,10 @@ test('cesta má po celé výšce stěnu svého sektoru', () => {
   const look = i => { jumpTo(i); G.camY = G.sy; A('draw')(); return px(); };
   const low = look(2), high = look(21);
   ok(low[0] > low[2] && high[0] > high[2], 'dřevo je teplé (víc červené než modré) dole i nahoře: ' + low + ' / ' + high);
+});
+test('na cestě se rekord nezobrazuje, na nekonečné stěně ano', () => {
+  A('startRoute')(A('ROUTES')[3]);
+  eq(A('$')('bestHud').hidden, true);
+  A('startGame')();
+  eq(A('$')('bestHud').hidden, false);
 });
