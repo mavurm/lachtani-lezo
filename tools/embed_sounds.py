@@ -1,5 +1,7 @@
-# Embeds the guitar recordings into adelka.html as one <script> with base64 strings.
-# Re-running replaces the previous embed, so new recordings can simply be dropped in.
+# Packs the guitar recordings into zvuky.js (base64 strings in window.ADELKA_SND)
+# and makes sure adelka.html loads it. Re-running rewrites zvuky.js, so new
+# recordings can simply be dropped in. Keeping the sounds out of adelka.html keeps
+# the game file small and readable.
 import base64, io, os, sys
 
 d = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,16 +27,18 @@ for key, name in FILES.items():
         print('missing', name)
         continue
     parts.append("%s:'%s'" % (key, base64.b64encode(open(path, 'rb').read()).decode()))
-block = '<script id="adelka-sounds">window.ADELKA_SND={' + ','.join(parts) + '};</script>\n'
+js = 'window.ADELKA_SND={\n' + ',\n'.join(parts) + '\n};\n'
+io.open(os.path.join(d, 'zvuky.js'), 'w', encoding='utf-8', newline='\n').write(js)
 
+tag = '<script src="zvuky.js"></script>\n'
 s = io.open(page, encoding='utf-8').read()
 start = s.find('<script id="adelka-sounds">')
-if start >= 0:
+if start >= 0:  # older layout: the sounds were inlined in the page
     end = s.index('</script>\n', start) + len('</script>\n')
-    s = s[:start] + block + s[end:]
-else:
+    s = s[:start] + tag + s[end:]
+elif tag not in s:
     anchor = "<script>\n(() => {"
     assert s.count(anchor) == 1
-    s = s.replace(anchor, block + anchor)
+    s = s.replace(anchor, tag + anchor)
 io.open(page, 'w', encoding='utf-8').write(s)
-print('embedded', len(parts), 'sounds,', len(block) // 1024, 'KB')
+print('zvuky.js:', len(parts), 'sounds,', len(js) // 1024, 'KB')

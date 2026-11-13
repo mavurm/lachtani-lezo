@@ -47,6 +47,8 @@ manifest = {
     ],
 }
 io.open(os.path.join(OUT, 'manifest.webmanifest'), 'w', encoding='utf-8', newline='\n').write(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+# the recordings live next to the page (see embed_sounds.py)
+shutil.copyfile(os.path.join(ROOT, 'zvuky.js'), os.path.join(OUT, 'zvuky.js'))
 # GitHub Pages: serve files as they are
 io.open(os.path.join(OUT, '.nojekyll'), 'w').write('')
 print('docs/ built:', sorted(os.listdir(OUT)))
