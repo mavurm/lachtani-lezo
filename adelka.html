@@ -149,6 +149,7 @@ h2{font-size:22px}
 .route-row .rname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .route-row .rgrade{font-family:var(--font-display);font-weight:800}
 .route-row .rstars{color:var(--hold);text-align:right;font-size:14px}
+.route-stars{margin:-4px 0 0;font-family:var(--font-display);font-size:38px;line-height:1;color:var(--hold);letter-spacing:.08em}
 @media (prefers-reduced-motion: reduce){ .life{transition:none} }
 </style>
 
@@ -236,6 +237,19 @@ h2{font-size:22px}
     <h2>Cesty</h2>
     <div class="guide-list" id="guideList"></div>
     <div class="btns"><button class="btn" id="guideBack" type="button">Zpět</button></div>
+  </div>
+</div>
+<div class="overlay" id="routeEnd" hidden>
+  <div class="card">
+    <div class="tape"><span id="routeEndTape">Cesta</span><span>Výsledek</span></div>
+    <h2 id="routeEndTitle">Top!</h2>
+    <p class="route-stars" id="routeEndStars">★★★</p>
+    <p class="detail" id="routeEndDetail"></p>
+    <div class="btns">
+      <button class="btn primary" id="routeNext" type="button">Další cesta</button>
+      <button class="btn" id="routeRetry" type="button">Zkusit znovu</button>
+      <button class="btn" id="routeGuide" type="button">Průvodce</button>
+    </div>
   </div>
 </div>
 <script src="zvuky.js"></script>
@@ -844,6 +858,39 @@ function drawBanner() {
   ctx.font = '800 15px Nunito, system-ui, sans-serif'; ctx.fillText(bn.sub, W / 2, y + 62);
   ctx.restore();
 }
+let lastRoute = null;
+function routeTop() {
+  G.mode = 'top'; G.topT = 0; G.pose = 'sheepish'; G.face = 1.5;
+  say('Top!', 1.4);
+  maraSay(['Kedlubna!'], 0.3);
+  SFX.clip(); SFX.start();   // clipping the lower-off, then the fanfare
+  floater('TOP!', '#ffd23f', holdX(G.cur), holdY(G.cur) - S * 0.5, 34);
+  chalk(G.sx, G.sy, 14, 120);
+}
+// after the top Mára lowers her straight to the mat
+function lowerFromTop() {
+  const hOff = 94 * K * SEAL, y0 = G.sy + hOff;
+  G.mode = 'fall';
+  G.anim = { t: 0, phase: 'lower', top: true, lc: G.lastClip, hOff, hx: G.sx, hy: y0, x0: G.sx, y0, gy: hOff, dl: Math.max(0.6, (hOff - y0) / (S * 14)) };
+  SFX.lower();
+  maraSay(MARA.lower, 0.2);
+}
+function routeFinish(ok) {
+  const r = G.route;
+  lastRoute = r;
+  G.mode = 'over'; G.pose = 'sheepish';
+  if (!ok) SFX.over();
+  setMusicLevel(0.35); setMusicLevel(1, 3);
+  const moves = routeMoves(r), stars = ok ? routeStars(G.falls, G.perfects, moves) : 0;
+  const prog = ok ? saveRouteStars(r.id, stars) : loadProgress(), next = nextRoute(r);
+  $('routeEndTape').textContent = r.name + ' · ' + r.grade;
+  $('routeEndTitle').textContent = ok ? 'Top!' : 'Neprošlo to';
+  $('routeEndStars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  $('routeEndStars').hidden = !ok;
+  $('routeEndDetail').textContent = 'pády: ' + G.falls + ' · perfektní chyty: ' + G.perfects + ' z ' + moves;
+  $('routeNext').hidden = !(ok && next && isRouteUnlocked(next, prog));
+  setTimeout(() => { if (G.mode === 'over') { $('routeEnd').hidden = false; $('hud').hidden = true; } }, 700);
+}
 function tap() {
   if (G.mode !== 'climb') return;
   const d = moveDiff();
@@ -1049,7 +1096,7 @@ function updateFall(dt) {
     if (u >= 1) { caught(a); a.phase = 'landed'; a.t = 0; }
   } else if (a.phase === 'landed') {
     G.pose = 'sheepish';
-    if (a.t > 0.5) { G.anim = null; G.tilt = null; G.sx = holdX(0); G.sy = holdY(0); gameOver(); return; }
+    if (a.t > 0.5) { G.anim = null; G.tilt = null; G.sx = holdX(0); G.sy = holdY(0); if (a.top) routeFinish(true); else gameOver(); return; }
   } else if (a.phase === 'ground') {
     G.pose = 'sheepish';
     if (a.t > 0.7) { endFall(); return; }
@@ -1067,6 +1114,7 @@ function endFall() {
 }
 let lastScore = 0;
 function gameOver() {
+  if (G.route) { routeFinish(false); return; }
   G.mode = 'over'; G.pose = 'sheepish';
   SFX.over();
   setMusicLevel(0.35); setMusicLevel(1, 3);
@@ -1119,6 +1167,9 @@ $('showBoard').addEventListener('click', () => { $('menu').hidden = true; $('boa
 $('closeBoard').addEventListener('click', () => { $('boardView').hidden = true; $('menu').hidden = false; });
 $('routesBtn').addEventListener('click', openGuide);
 $('guideBack').addEventListener('click', () => { $('guide').hidden = true; $('menu').hidden = false; });
+$('routeNext').addEventListener('click', () => startRoute(nextRoute(lastRoute)));
+$('routeRetry').addEventListener('click', () => startRoute(lastRoute));
+$('routeGuide').addEventListener('click', openGuide);
 
 /* ---------- update ---------- */
 function update(dt) {
@@ -1163,6 +1214,11 @@ function update(dt) {
     }
     case 'fall':
       updateFall(dt);
+      break;
+    case 'top':
+      G.topT += dt;
+      G.sx = holdX(G.cur); G.sy = holdY(G.cur);
+      if (G.topT > 1.6) lowerFromTop();
       break;
     case 'day': {
       const d = G.day; d.t += dt; d.puff -= dt;
@@ -1404,6 +1460,13 @@ function drawRoute() {
       ctx.fillStyle = routeColor; ctx.fillRect(-26, -8, 52, 16);
       ctx.fillStyle = '#1d2b3a'; ctx.font = '800 11px Nunito, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('START', 0, 1);
+      ctx.restore();
+    }
+    if (G.route && i === G.route.holds.length - 1) {
+      ctx.save(); ctx.translate(x, y - S * 0.32); ctx.rotate(0.06);
+      ctx.fillStyle = routeColor; ctx.fillRect(-20, -8, 40, 16);
+      ctx.fillStyle = '#1d2b3a'; ctx.font = '800 11px Nunito, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('TOP', 0, 1);
       ctx.restore();
     }
   }
