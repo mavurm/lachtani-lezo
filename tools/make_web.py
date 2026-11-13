@@ -16,7 +16,7 @@ head = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="description" content="Lachtanka Adélka leze nekonečnou stěnu. Pomoz jí vylézt, aby mohla na smažák a pivo.">
+<meta name="description" content="Lachtanka Adélka leze, aby mohla na smažák a pivo. Pomoz jí vylézt cesty v hale a na překližce, nebo zkus, jak vysoko vyleze na nekonečné stěně.">
 <meta name="theme-color" content="#22384d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
